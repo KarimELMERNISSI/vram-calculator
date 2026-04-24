@@ -1,0 +1,6 @@
+baseURL = "https://karimELMERNISSI.github.io/vram-calculator/"
+languageCode = "en-us"
+title = "LLM VRAM Calculator"
+
+[params]
+    description = "A professional LLM VRAM Calculator with Hugging Face integration"
