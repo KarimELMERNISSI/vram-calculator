@@ -1,0 +1,105 @@
+      <div class="card" id="perfCard">
+        <h2>Performances estimation</h2>
+        <div class="g3">
+          <div class="met">
+            <div class="ml">
+              Prefill speed <span class="qbtn" data-pop="prefill_speed">?</span>
+            </div>
+            <div class="mv" id="pPrefill">&mdash;</div>
+            <div class="ms">tok/s</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              Decode speed <span class="qbtn" data-pop="decode_speed">?</span>
+            </div>
+            <div class="mv" id="pDecode">&mdash;</div>
+            <div class="ms">tok/s per user</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              Latency/tok <span class="qbtn" data-pop="latency_per_tok">?</span>
+            </div>
+            <div class="mv" id="pLat">&mdash;</div>
+            <div class="ms">ms</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              TTFT <span class="qbtn" data-pop="ttft">?</span>
+            </div>
+            <div class="mv" id="pTTFT">&mdash;</div>
+            <div class="ms">ms</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              100 tokens <span class="qbtn" data-pop="time_100">?</span>
+            </div>
+            <div class="mv" id="p100">&mdash;</div>
+            <div class="ms">seconds</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              1000 tokens <span class="qbtn" data-pop="time_1000">?</span>
+            </div>
+            <div class="mv" id="p1000">&mdash;</div>
+            <div class="ms">seconds</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              Multi-user throughput
+              <span class="qbtn" data-pop="throughput">?</span>
+            </div>
+            <div class="mv" id="pThr">&mdash;</div>
+            <div class="ms">tok/s all users</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              HBM bandwidth used <span class="qbtn" data-pop="gpu_hbm">?</span>
+            </div>
+            <div class="mv" id="pBwUsed" style="font-size: 1.1rem">&mdash;</div>
+            <div class="ms">GB/s</div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              Bottleneck <span class="qbtn" data-pop="roofline_model">?</span>
+            </div>
+            <div class="mv" id="pBottleneck" style="font-size: 0.82rem">
+              &mdash;
+            </div>
+          </div>
+          <div class="met">
+            <div class="ml">
+              Arith. intensity
+              <span class="qbtn" data-pop="roofline_model">?</span>
+            </div>
+            <div class="mv" id="pArithInt" style="font-size: 1.1rem">
+              &mdash;
+            </div>
+            <div class="ms">FLOP/byte</div>
+          </div>
+        </div>
+        <div
+          id="ramPerfNote"
+          class="ram-warn"
+          style="display: none; margin-top: 0.5rem"
+        ></div>
+        <div
+          id="tpPerfNote"
+          class="ram-warn"
+          style="
+            display: none;
+            margin-top: 0.5rem;
+            background: #e0f2fe;
+            border-color: #7dd3fc;
+            color: #0369a1;
+          "
+        >
+          Multi-GPU Tensor Parallelism active. Efficiency depends on NVLink vs
+          PCIe interconnect quality.
+        </div>
+        <p class="note">
+          Roofline model: decode is bandwidth-bound (low arithmetic intensity),
+          prefill is compute-bound. MoE models use active-parameter count.
+          Actual results depend on engine, batch strategy, and kernel
+          optimization.
+        </p>
+      </div>

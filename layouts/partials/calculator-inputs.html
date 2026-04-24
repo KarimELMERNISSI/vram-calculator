@@ -1,0 +1,458 @@
+﻿      <!-- CALCULATOR -->
+      <div class="tabs">
+        <button class="tab on" onclick="setMode('inf')">Inference</button>
+        <button class="tab" onclick="setMode('ft')">Fine-tuning</button>
+      </div>
+      <div class="g2" style="margin-bottom: 0.75rem">
+        <div class="card" style="margin-bottom: 0">
+          <h2>Model</h2>
+          <div style="margin-bottom: 0.6rem">
+            <label>Select preset</label
+            ><select id="mSel" onchange="onMC()"></select>
+          </div>
+          <div class="g2">
+            <div class="met">
+              <div class="ml">
+                Parameters <span class="qbtn" data-pop="total_params">?</span>
+              </div>
+              <div class="mv" id="dP">&mdash;</div>
+            </div>
+            <div class="met">
+              <div class="ml">
+                Architecture <span class="qbtn" data-pop="architecture">?</span>
+              </div>
+              <div class="mv" id="dA" style="font-size: 12px">&mdash;</div>
+            </div>
+            <div class="met">
+              <div class="ml">
+                Layers <span class="qbtn" data-pop="layers">?</span>
+              </div>
+              <div class="mv" id="dL">&mdash;</div>
+            </div>
+            <div class="met">
+              <div class="ml">
+                KV heads <span class="qbtn" data-pop="kv_heads">?</span>
+              </div>
+              <div class="mv" id="dKV">&mdash;</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom: 0">
+          <h2>Hardware</h2>
+          <div style="margin-bottom: 0.6rem">
+            <label>GPU device</label
+            ><select id="gSel" onchange="onGpuChange()"></select>
+          </div>
+          <div id="customGpuRow" class="custom-gpu-row">
+            <div class="g3" style="margin-bottom: 0.5rem">
+              <div>
+                <label>VRAM (GB)</label
+                ><input
+                  type="number"
+                  id="cVram"
+                  value="24"
+                  min="1"
+                  step="1"
+                  oninput="calc()"
+                />
+              </div>
+              <div>
+                <label>HBM Bandwidth (GB/s)</label
+                ><input
+                  type="number"
+                  id="cBw"
+                  value="1000"
+                  min="1"
+                  step="1"
+                  oninput="calc()"
+                />
+              </div>
+              <div>
+                <label>TDP (W)</label
+                ><input
+                  type="number"
+                  id="cTdp"
+                  value="300"
+                  min="1"
+                  step="1"
+                  oninput="calc()"
+                />
+              </div>
+            </div>
+            <div class="g3" style="margin-bottom: 0.5rem">
+              <div>
+                <label
+                  >FP16 TFLOPS
+                  <span class="qbtn" data-pop="gpu_compute">?</span></label
+                ><input
+                  type="number"
+                  id="cTflops"
+                  value="165"
+                  min="0"
+                  step="1"
+                  oninput="calc()"
+                />
+              </div>
+              <div>
+                <label
+                  >PCIe Generation
+                  <span class="qbtn" data-pop="pcie_bus">?</span></label
+                >
+                <select id="cPcieGen" onchange="calc()">
+                  <option value="3">Gen3 (15.75 GB/s x16)</option>
+                  <option value="4" selected>Gen4 (31.5 GB/s x16)</option>
+                  <option value="5">Gen5 (63.0 GB/s x16)</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  >PCIe Lanes
+                  <span class="qbtn" data-pop="pcie_lanes">?</span></label
+                >
+                <select id="cPcieLanes" onchange="calc()">
+                  <option value="4">x4</option>
+                  <option value="8">x8</option>
+                  <option value="16" selected>x16</option>
+                </select>
+              </div>
+            </div>
+            <div class="g3" style="margin-bottom: 0.5rem">
+              <div>
+                <label
+                  >NVLink BW (GB/s)
+                  <span class="qbtn" data-pop="nvlink_interconnect"
+                    >?</span
+                  ></label
+                ><input
+                  type="number"
+                  id="cNvlink"
+                  value="0"
+                  min="0"
+                  step="1"
+                  oninput="calc()"
+                />
+              </div>
+              <div>
+                <label
+                  >Has NVSwitch?
+                  <span class="qbtn" data-pop="nvswitch">?</span></label
+                >
+                <select id="cNvswitch" onchange="calc()">
+                  <option value="0">No</option>
+                  <option value="1">Yes</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div style="margin-bottom: 0.6rem">
+            <label>Number of GPUs</label>
+            <div class="rw">
+              <input
+                type="range"
+                id="nG"
+                min="1"
+                max="8"
+                value="1"
+                oninput="
+                  ss('nG', 'nGo');
+                  calc();
+                "
+              /><span class="rv" id="nGo">1</span>
+            </div>
+          </div>
+          <div class="met">
+            <div class="ml">Total usable VRAM</div>
+            <div class="mv" id="tV">&mdash;</div>
+          </div>
+          <!-- Multi-GPU interconnect -->
+          <div id="interconnRow" style="display: none; margin-top: 0.8rem">
+            <label
+              >Inter-GPU interconnect
+              <span class="qbtn" data-pop="tensor_parallelism">?</span></label
+            >
+            <select id="interconnType" onchange="calc()">
+              <option value="nvswitch">NVSwitch (all-to-all)</option>
+              <option value="nvlink">NVLink P2P (ring)</option>
+              <option value="pcie">PCIe P2P (no NVLink)</option>
+              <option value="pipeline">Pipeline Parallelism</option>
+              <option value="none">No direct interconnect</option>
+            </select>
+            <div class="g3" style="margin-top: 0.5rem">
+              <div class="met">
+                <div class="ml">
+                  Interconnect BW
+                  <span class="qbtn" data-pop="nvlink_interconnect">?</span>
+                </div>
+                <div class="mv" id="dInterBW" style="font-size: 1.1rem">
+                  &mdash;
+                </div>
+                <div class="ms">GB/s</div>
+              </div>
+              <div class="met">
+                <div class="ml">
+                  TP/PP efficiency
+                  <span class="qbtn" data-pop="tensor_parallelism">?</span>
+                </div>
+                <div class="mv" id="dTPEff" style="font-size: 1.1rem">
+                  &mdash;
+                </div>
+              </div>
+              <div class="met">
+                <div class="ml">
+                  All-reduce latency
+                  <span class="qbtn" data-pop="roofline_model">?</span>
+                </div>
+                <div class="mv" id="dARLat" style="font-size: 1.1rem">
+                  &mdash;
+                </div>
+                <div class="ms">&mu;s/layer</div>
+              </div>
+            </div>
+          </div>
+          <!-- RAM offload -->
+          <label
+            style="
+              text-transform: none;
+              letter-spacing: 0;
+              font-size: 0.78rem;
+              cursor: pointer;
+              margin-top: 0.8rem;
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            "
+          >
+            <input
+              type="checkbox"
+              id="ramOff"
+              onchange="
+                toggleRamOff();
+                calc();
+              "
+              style="width: auto"
+            />
+            Enable RAM offloading
+          </label>
+          <div id="ramRow" class="ram-row">
+            <div class="g2" style="margin-bottom: 0.5rem">
+              <div>
+                <label
+                  >System RAM (GB)
+                  <span class="qbtn" data-pop="ram_overflow">?</span></label
+                ><input
+                  type="number"
+                  id="sysRam"
+                  value="64"
+                  min="1"
+                  step="1"
+                  oninput="calc()"
+                />
+              </div>
+              <div>
+                <label
+                  >RAM type
+                  <span class="qbtn" data-pop="ram_bandwidth">?</span></label
+                >
+                <select id="ramType" onchange="calc()">
+                  <option value="ddr5_2">DDR5 2-ch (89.6 GB/s)</option>
+                  <option value="ddr5_4">DDR5 4-ch (179.2 GB/s)</option>
+                  <option value="ddr5_8">DDR5 8-ch (358.4 GB/s)</option>
+                  <option value="ddr4_2">DDR4 2-ch (51.2 GB/s)</option>
+                  <option value="ddr4_4">DDR4 4-ch (102.4 GB/s)</option>
+                  <option value="ddr4_8">DDR4 8-ch (204.8 GB/s)</option>
+                </select>
+              </div>
+            </div>
+            <label
+              style="
+                text-transform: none;
+                letter-spacing: 0;
+                font-size: 0.72rem;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-bottom: 0.5rem;
+              "
+            >
+              <input
+                type="checkbox"
+                id="numaAware"
+                onchange="calc()"
+                style="width: auto"
+              />
+              NUMA-aware allocation
+              <span class="qbtn" data-pop="numa_effects">?</span>
+            </label>
+            <div class="g3">
+              <div class="met">
+                <div class="ml">
+                  PCIe BW (effective)
+                  <span class="qbtn" data-pop="pcie_efficiency">?</span>
+                </div>
+                <div class="mv" id="dPcieBW" style="font-size: 1.1rem">
+                  &mdash;
+                </div>
+                <div class="ms">GB/s</div>
+              </div>
+              <div class="met">
+                <div class="ml">
+                  RAM BW (effective)
+                  <span class="qbtn" data-pop="ram_efficiency">?</span>
+                </div>
+                <div class="mv" id="dRamBW" style="font-size: 1.1rem">
+                  &mdash;
+                </div>
+                <div class="ms">GB/s</div>
+              </div>
+              <div class="met">
+                <div class="ml">
+                  Bus Wall <span class="qbtn" data-pop="bus_wall">?</span>
+                </div>
+                <div
+                  class="mv"
+                  id="dBusWall"
+                  style="font-size: 1.1rem; color: var(--amber)"
+                >
+                  &mdash;
+                </div>
+                <div class="ms">&times; slower</div>
+              </div>
+            </div>
+            <div class="g3" style="margin-top: 0.5rem">
+              <div class="met">
+                <div class="ml">
+                  Transfer bottleneck
+                  <span class="qbtn" data-pop="bus_wall">?</span>
+                </div>
+                <div
+                  class="mv"
+                  id="dBottleneck"
+                  style="font-size: 0.85rem; color: var(--amber)"
+                >
+                  &mdash;
+                </div>
+              </div>
+              <div class="met">
+                <div class="ml">PCIe lanes</div>
+                <div class="mv" id="dPcieLanes" style="font-size: 1.1rem">
+                  &mdash;
+                </div>
+              </div>
+              <div class="met">
+                <div class="ml">HBM BW</div>
+                <div class="mv" id="dHbmBW" style="font-size: 1.1rem">
+                  &mdash;
+                </div>
+                <div class="ms">GB/s</div>
+              </div>
+            </div>
+          </div>
+          <div id="ramWarn" class="ram-warn" style="display: none">
+            RAM-offloaded layers limited by PCIe + RAM bandwidth (the "Bus
+            Wall"). Performance degrades proportionally to the Bus Wall ratio.
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Quantization &amp; context</h2>
+        <div class="g3" style="margin-bottom: 0.6rem">
+          <div>
+            <label
+              >Weight precision
+              <span class="qbtn" data-pop="weight_precision">?</span></label
+            >
+            <select id="qW" onchange="calc()">
+              <option value="4">FP32 (4 B/param)</option>
+              <option value="2">BF16/FP16 (2 B/param)</option>
+              <option value="1.06">Q8_0 / FP8 (1.06 B/param)</option>
+              <option value="1">INT8 (1 B/param)</option>
+              <option value="0.825">Q6_K (~0.83 B/param)</option>
+              <option value="0.71">Q5_K_M (~0.71 B/param)</option>
+              <option value="0.6">Q4_K_M (~0.60 B/param)</option>
+              <option value="0.5" selected>Q4/NF4 (0.50 B/param)</option>
+              <option value="0.43">Q3_K_M (~0.43 B/param)</option>
+              <option value="0.32">Q2_K (~0.32 B/param)</option>
+              <option value="0.25">Q2 (0.25 B/param)</option>
+            </select>
+          </div>
+          <div>
+            <label
+              >KV cache precision
+              <span class="qbtn" data-pop="kv_cache_precision">?</span></label
+            >
+            <select id="qKV" onchange="calc()">
+              <option value="2" selected>FP16 (2 B)</option>
+              <option value="1">FP8/INT8 (1 B)</option>
+              <option value="0.5">Q4 (0.5 B)</option>
+            </select>
+          </div>
+          <div id="ftSel" style="display: none">
+            <label>Training method</label>
+            <select id="tM" onchange="calc()">
+              <option value="lora">LoRA / QLoRA</option>
+              <option value="full">Full fine-tune</option>
+            </select>
+          </div>
+          <div id="uSel">
+            <label
+              >Concurrent users
+              <span class="qbtn" data-pop="concurrent_users">?</span></label
+            >
+            <div class="rw">
+              <input
+                type="range"
+                id="uS"
+                min="1"
+                max="32"
+                value="1"
+                oninput="
+                  ss('uS', 'uSo');
+                  calc();
+                "
+              /><span class="rv" id="uSo">1</span>
+            </div>
+          </div>
+        </div>
+        <div class="g2">
+          <div>
+            <label
+              >Context length (tokens)
+              <span class="qbtn" data-pop="context_length">?</span></label
+            >
+            <div class="rw">
+              <input
+                type="range"
+                id="ctx"
+                min="512"
+                max="131072"
+                value="4096"
+                step="512"
+                oninput="
+                  ss('ctx', 'ctxo', 1);
+                  calc();
+                "
+              /><span class="rv" id="ctxo">4,096</span>
+            </div>
+          </div>
+          <div>
+            <label
+              >Batch size
+              <span class="qbtn" data-pop="batch_size">?</span></label
+            >
+            <div class="rw">
+              <input
+                type="range"
+                id="bs"
+                min="1"
+                max="64"
+                value="1"
+                oninput="
+                  ss('bs', 'bso');
+                  calc();
+                "
+              /><span class="rv" id="bso">1</span>
+            </div>
+          </div>
+        </div>
+      </div>

@@ -1,0 +1,128 @@
+﻿      <!-- POWER & COST CARD -->
+      <div class="card powercard" id="powerCard">
+        <h2>Power &amp; cost estimation</h2>
+        <div class="g3" style="margin-bottom: 0.8rem">
+          <div>
+            <label
+              >GPU TDP (W)
+              <span class="qbtn" data-pop="power_draw">?</span></label
+            ><input
+              type="number"
+              id="pTdp"
+              value="700"
+              min="1"
+              step="1"
+              oninput="calc()"
+            />
+          </div>
+          <div>
+            <label
+              >Electricity ($/kWh)
+              <span class="qbtn" data-pop="cost_per_kwh">?</span></label
+            ><input
+              type="number"
+              id="pElec"
+              value="0.12"
+              min="0"
+              step="0.01"
+              oninput="calc()"
+            />
+          </div>
+          <div>
+            <label
+              >GPU utilization (%)
+              <span class="qbtn" data-pop="gpu_util">?</span></label
+            ><input
+              type="number"
+              id="pUtil"
+              value="80"
+              min="1"
+              max="100"
+              step="1"
+              oninput="calc()"
+            />
+          </div>
+          <div>
+            <label>Hours per day</label
+            ><input
+              type="number"
+              id="pHrs"
+              value="24"
+              min="1"
+              max="24"
+              step="1"
+              oninput="calc()"
+            />
+          </div>
+          <div>
+            <label
+              >Carbon intensity (kg CO2/kWh)
+              <span class="qbtn" data-pop="co2">?</span></label
+            ><input
+              type="number"
+              id="pCarbon"
+              value="0.417"
+              min="0"
+              step="0.001"
+              oninput="calc()"
+            />
+          </div>
+        </div>
+        <div class="g4" style="margin-bottom: 0.6rem">
+          <div class="cost-met">
+            <div class="ml">Power draw</div>
+            <div class="mv" id="cPower">&mdash;</div>
+            <div class="ms">W</div>
+          </div>
+          <div class="cost-met">
+            <div class="ml">Cost / hour</div>
+            <div class="mv" id="cHr">&mdash;</div>
+            <div class="ms">$</div>
+          </div>
+          <div class="cost-met">
+            <div class="ml">Cost / month</div>
+            <div class="mv" id="cMonth">&mdash;</div>
+            <div class="ms">$</div>
+          </div>
+          <div class="cost-met">
+            <div class="ml">Cost / 1M tokens</div>
+            <div class="mv" id="c1M">&mdash;</div>
+            <div class="ms">$</div>
+          </div>
+          <div class="cost-met">
+            <div class="ml">Energy / hour</div>
+            <div class="mv" id="cKwh">&mdash;</div>
+            <div class="ms">kWh</div>
+          </div>
+          <div class="cost-met">
+            <div class="ml">Cost / day</div>
+            <div class="mv" id="cDay">&mdash;</div>
+            <div class="ms">$</div>
+          </div>
+          <div class="cost-met">
+            <div class="ml">CO2 / hour</div>
+            <div class="mv" id="cCo2Hr">&mdash;</div>
+            <div class="ms">kg</div>
+          </div>
+          <div class="cost-met">
+            <div class="ml">Annual CO2</div>
+            <div class="mv" id="cCo2Yr">&mdash;</div>
+            <div class="ms">tonnes</div>
+          </div>
+        </div>
+        <p class="note">
+          Power draw = TDP &times; utilization%. Energy cost varies
+          significantly by region ($0.05&ndash;$0.40/kWh). Carbon intensity:
+          world avg ~0.417 kg CO2/kWh, EU ~0.255, US ~0.387, France ~0.056
+          (nuclear), Poland ~0.769 (coal).
+        </p>
+      </div>
+      <!-- POPOVER CONTAINER -->
+      <div class="vc-popover" id="vc-popover">
+        <span class="vc-pop-close" onclick="closePopover()">&times;</span>
+        <div class="vc-pop-title" id="vc-popTitle"></div>
+        <div class="vc-pop-formula" id="vc-popFormula"></div>
+        <div class="vc-pop-explain" id="vc-popExplain"></div>
+        <div class="vc-pop-refs" id="vc-popRefs"></div>
+      </div>
+    </div>

@@ -1,0 +1,94 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages for styling and functionality
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage{xcolor}
+
+% Page geometry
+\geometry{margin=2.5cm}
+
+% Header and footer
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{LLM VRAM Calculator}
+\lhead{Technical Documentation}
+\rfoot{Page \thepage}
+
+% Title styling
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}[\titlerule]
+
+\title{
+    \vspace{-2cm}
+    \textbf{LLM VRAM Calculator} \\
+    \large Technical Documentation and Methodology
+}
+\author{Croix-Rouge luxembourgeoise}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+The \textbf{LLM VRAM Calculator} is a professional estimation tool designed to help researchers and engineers accurately project the hardware requirements for deploying Large Language Models (LLMs). 
+
+As models grow in size and complexity (e.g., Mixture-of-Experts, GQA/MQA architectures), understanding memory constraints and performance bottlenecks is critical for cost-effective deployment.
+
+\section{Core Features}
+\begin{itemize}
+    \item \textbf{Hugging Face Integration}: Direct metadata import from the HF Hub.
+    \item \textbf{Architecture Awareness}: Support for Dense and MoE models.
+    \item \textbf{Quantization Modeling}: Support for GGUF, GPTQ, AWQ, EXL2, and NF4.
+    \item \textbf{Performance Estimation}: Roofline modeling for latency and throughput.
+    \item \textbf{Cost Analysis}: Power consumption and CO\textsubscript{2} emission estimates.
+\end{itemize}
+
+\section{Methodology}
+\subsection{Memory Estimation}
+The total VRAM consumption is calculated as the sum of weights, KV cache, and activation memory:
+\begin{equation}
+    VRAM_{total} = VRAM_{weights} + VRAM_{KV\_cache} + VRAM_{activations}
+\end{equation}
+
+\subsubsection{Weights Memory}
+For a model with $P$ parameters and a quantization bit-depth $b$:
+\begin{equation}
+    VRAM_{weights} = P \times \frac{b}{8} \times 1.05 \text{ (overhead buffer)}
+\end{equation}
+
+\subsubsection{KV Cache Memory}
+For Grouped-Query Attention (GQA):
+\begin{equation}
+    VRAM_{KV} = 2 \times L \times H_{kv} \times D \times S \times \frac{b_{kv}}{8}
+\end{equation}
+Where:
+\begin{itemize}
+    \item $L$: Number of layers
+    \item $H_{kv}$: Number of KV heads
+    \item $D$: Head dimension
+    \item $S$: Sequence length (Context)
+    \item $b_{kv}$: Precision bits for KV cache
+\end{itemize}
+
+\section{User Guide}
+\subsection{Importing from Hugging Face}
+To import a model, use the search bar to find the repository ID (e.g., \texttt{meta-llama/Llama-3.1-8B}). The tool will automatically fetch the configuration files (\texttt{config.json}, \texttt{generation\_config.json}) to populate the calculator.
+
+\subsection{Configuring Quantization}
+Select the desired quantization format from the dropdown. Note that different formats (e.g., GGUF vs. EXL2) have different overheads and hardware compatibility.
+
+\section{Conclusion}
+This tool aims to bridge the gap between theoretical model size and practical deployment constraints, enabling informed decisions on hardware procurement and optimization strategies.
+
+\end{document}

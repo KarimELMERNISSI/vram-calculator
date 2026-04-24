@@ -1,0 +1,242 @@
+﻿      <div class="card hfcard">
+        <h2>Hugging Face import</h2>
+        <div class="irow">
+          <div class="srch-wrap">
+            <label>Model ID</label>
+            <input
+              type="text"
+              id="hfId"
+              value="unsloth/gemma-4-26B-A4B-it"
+              placeholder="org/model-name"
+              oninput="onSearchInput()"
+              onfocus="onSearchInput()"
+              autocomplete="off"
+            />
+            <div class="srch-drop" id="srchDrop"></div>
+          </div>
+          <button class="btn-p" id="hfBtn" onclick="hfFetch()">
+            Import model metadata
+          </button>
+        </div>
+        <label
+          style="
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: 0.78rem;
+            cursor: pointer;
+          "
+        >
+          <input
+            type="checkbox"
+            id="hfUseTok"
+            onchange="
+              document.getElementById('tokRow').style.display = this.checked
+                ? 'block'
+                : 'none'
+            "
+            style="width: auto; margin-right: 6px"
+          />
+          Private / gated (requires token)
+        </label>
+        <div id="tokRow" style="display: none; margin-top: 6px">
+          <label>Access token</label
+          ><input type="password" id="hfTok" placeholder="hf_xxx" />
+        </div>
+        <div class="g4" style="margin-top: 12px">
+          <div class="mc">
+            <div class="mk">Param source</div>
+            <div class="mw" id="mPS">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Task</div>
+            <div class="mw" id="mTask">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Downloads</div>
+            <div class="mw" id="mDL">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Library</div>
+            <div class="mw" id="mLib">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">License</div>
+            <div class="mw" id="mLic">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Base model</div>
+            <div class="mw" id="mBase">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Base relation</div>
+            <div class="mw" id="mBaseR">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Last modified</div>
+            <div class="mw" id="mMod">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Total params</div>
+            <div class="mw" id="mTP">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Active params</div>
+            <div class="mw" id="mAP">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Expert count</div>
+            <div class="mw" id="mExp">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Sliding window</div>
+            <div class="mw" id="mSW">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Context length</div>
+            <div class="mw" id="mCtx">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Vocabulary</div>
+            <div class="mw" id="mVoc">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Tensor / quant type</div>
+            <div class="mw" id="mTensor">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Modalities</div>
+            <div class="mw" id="mMod2">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Vision encoder</div>
+            <div class="mw" id="mVis">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Languages</div>
+            <div class="mw" id="mLang" style="font-size: 0.68rem">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Datasets</div>
+            <div class="mw" id="mDS" style="font-size: 0.68rem">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Tags</div>
+            <div class="mw" id="mTags" style="font-size: 0.65rem">&mdash;</div>
+          </div>
+          <div class="mc">
+            <div class="mk">Eval metrics</div>
+            <div class="mw" id="mEval" style="font-size: 0.68rem">&mdash;</div>
+          </div>
+        </div>
+
+        <!-- VARIANT SELECTOR -->
+        <div class="var-section" id="varSection">
+          <h2 style="margin-top: 8px">
+            Quantized variants
+            <span
+              style="
+                font-weight: 400;
+                font-size: 0.68rem;
+                text-transform: none;
+                letter-spacing: 0;
+                color: var(--mu);
+              "
+              >(click to explore)</span
+            >
+          </h2>
+          <div class="var-grid" id="varGrid"></div>
+          <div class="var-status" id="varStatus"></div>
+        </div>
+
+        <div class="wbox" id="hfW"></div>
+        <h2 style="margin-top: 14px">Manual architecture overrides</h2>
+        <div class="eg">
+          <div>
+            <label
+              >Total params (B)
+              <span class="qbtn" data-pop="total_params">?</span></label
+            ><input
+              type="number"
+              id="eP"
+              step="0.01"
+              min="0"
+              oninput="hfSync()"
+            />
+          </div>
+          <div>
+            <label
+              >Active params (B)
+              <span class="qbtn" data-pop="active_params">?</span></label
+            ><input
+              type="number"
+              id="ePA"
+              step="0.01"
+              min="0"
+              oninput="hfSync()"
+            />
+          </div>
+          <div>
+            <label
+              >Architecture
+              <span class="qbtn" data-pop="architecture">?</span></label
+            >
+            <select id="eArch" onchange="hfSync()">
+              <option value="dense">Dense</option>
+              <option value="moe">MoE</option>
+            </select>
+          </div>
+          <div>
+            <label>Layers <span class="qbtn" data-pop="layers">?</span></label
+            ><input type="number" id="eL" step="1" min="0" oninput="hfSync()" />
+          </div>
+          <div>
+            <label>Hidden size</label
+            ><input type="number" id="eH" step="1" min="0" oninput="hfSync()" />
+          </div>
+          <div>
+            <label>Attn heads</label
+            ><input
+              type="number"
+              id="eNH"
+              step="1"
+              min="0"
+              oninput="hfSync()"
+            />
+          </div>
+          <div>
+            <label
+              >KV heads <span class="qbtn" data-pop="kv_heads">?</span></label
+            ><input
+              type="number"
+              id="eNKV"
+              step="1"
+              min="0"
+              oninput="hfSync()"
+            />
+          </div>
+          <div>
+            <label>Head dim</label
+            ><input
+              type="number"
+              id="eHD"
+              step="1"
+              min="0"
+              oninput="hfSync()"
+            />
+          </div>
+          <div>
+            <label>Task</label
+            ><input type="text" id="eTask" oninput="hfSync()" />
+          </div>
+        </div>
+        <div class="irow">
+          <button class="btn-s" onclick="hfReset()">
+            &#8634; Reset to imported
+          </button>
+          <span class="conf" id="hfConf">Confidence: not imported</span>
+        </div>
+        <p class="note">
+          Total params &rarr; memory sizing. Active params &rarr; throughput
+          only (MoE). Missing fields downgrade to rule-of-thumb.
+        </p>
+      </div>

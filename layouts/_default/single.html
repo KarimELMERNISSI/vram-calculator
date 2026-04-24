@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{ .Title }} - LLM VRAM Calculator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}]});"></script>
+    {{ $css := resources.Get "css/calculator.css" }}
+    <link rel="stylesheet" href="{{ $css.RelPermalink }}" />
+    <style>
+      .doc-container {
+        flex: 1;
+        min-width: 0;
+        max-width: 900px;
+        margin: 0;
+        background: #fff;
+        padding: 2rem 3rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+        border: 1px solid var(--bd);
+        line-height: 1.6;
+        color: #334155;
+      }
+      .doc-container h1, .doc-container h2, .doc-container h3, .doc-container h4 {
+        color: var(--text);
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+      }
+      .doc-container h1 { font-size: 1.8rem; font-weight: 800; border-bottom: 2px solid var(--bd); padding-bottom: 0.3em; }
+      .doc-container h2 { font-size: 1.4rem; font-weight: 700; border-bottom: 1px solid var(--bd); padding-bottom: 0.3em; }
+      .doc-container h3 { font-size: 1.1rem; font-weight: 600; }
+      .doc-container p { margin-bottom: 1rem; }
+      .doc-container ul, .doc-container ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+      .doc-container li { margin-bottom: 0.3rem; }
+      .doc-container code { background: var(--surf); padding: 0.2em 0.4em; border-radius: 4px; font-family: monospace; font-size: 0.9em; border: 1px solid var(--bd); }
+      .doc-container pre code { background: none; padding: 0; border: none; }
+      .doc-container pre { background: #0f172a; color: #f8fafc; padding: 1rem; border-radius: 8px; overflow-x: auto; margin-bottom: 1rem; }
+      .doc-container blockquote { 
+        border-left: 4px solid var(--p); 
+        padding: 1rem 1.5rem; 
+        margin: 1.5rem 0; 
+        color: #475569; 
+        background: var(--surf); 
+        border-radius: 0 8px 8px 0; 
+        font-style: italic; 
+      }
+      .doc-container table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin: 1.5rem 0; 
+        font-size: 0.9rem; 
+      }
+      .doc-container th, .doc-container td { 
+        border: 1px solid var(--bd); 
+        padding: 10px 12px; 
+        text-align: left; 
+      }
+      .doc-container th { 
+        background: #f1f5f9; 
+        font-weight: 700; 
+        color: var(--text); 
+      }
+      .doc-container tr:nth-child(even) { background: #fafafa; }
+      .doc-container .katex-display {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1.2rem 1rem;
+        margin: 1.5rem 0;
+        overflow-x: auto;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+      }
+      .nav-bar { max-width: 1100px; margin: 0 auto 1rem; display: flex; justify-content: space-between; align-items: center; }
+      .nav-link { color: var(--p); text-decoration: none; font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; }
+      .nav-link:hover { text-decoration: underline; }
+      .layout-grid {
+        display: flex;
+        max-width: 1200px;
+        margin: 0 auto;
+        gap: 2rem;
+      }
+      .sidebar {
+        flex: 0 0 280px;
+      }
+      .sidebar-sticky {
+        position: sticky;
+        top: 2rem;
+        background: #fff;
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid var(--bd);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+        max-height: calc(100vh - 4rem);
+        overflow-y: auto;
+      }
+      .sidebar-sticky h3 {
+        font-size: 0.85rem;
+        font-weight: 800;
+        color: var(--text);
+        margin-bottom: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid var(--bd);
+        padding-bottom: 0.5rem;
+        margin-top: 0;
+      }
+      .sidebar-sticky nav ul {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+      }
+      .sidebar-sticky nav ul ul {
+        padding-left: 1rem;
+        margin-top: 0.3rem;
+        margin-bottom: 0.3rem;
+        display: none;
+      }
+      .sidebar-sticky nav ul ul.open {
+        display: block;
+      }
+      .sidebar-sticky nav li.has-children > a {
+        position: relative;
+      }
+      .sidebar-sticky nav li.has-children > a::after {
+        content: '▸';
+        position: absolute;
+        right: 0;
+        top: 2px;
+        transition: transform 0.2s;
+        font-size: 0.8em;
+        color: #94a3b8;
+      }
+      .sidebar-sticky nav li.has-children.open > a::after {
+        transform: rotate(90deg);
+      }
+      .sidebar-sticky nav li {
+        margin-bottom: 0.4rem;
+      }
+      .sidebar-sticky nav a {
+        text-decoration: none;
+        color: #64748b;
+        font-size: 0.8rem;
+        font-weight: 500;
+        display: block;
+        line-height: 1.4;
+        transition: color 0.15s;
+      }
+      .sidebar-sticky nav a:hover {
+        color: var(--p);
+        font-weight: 600;
+      }
+      @media (max-width: 900px) {
+        .layout-grid { flex-direction: column; }
+        .sidebar { width: 100%; flex: none; }
+        .sidebar-sticky { position: static; max-height: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="nav-bar">
+      <a href="{{ site.BaseURL }}" class="nav-link">← Back to Calculator</a>
+    </div>
+    <div class="layout-grid">
+      <aside class="sidebar">
+        <div class="sidebar-sticky">
+          <h3>Table of Contents</h3>
+          {{ .TableOfContents }}
+        </div>
+      </aside>
+      <main class="doc-container">
+        {{ .Content }}
+      </main>
+    </div>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const tocItems = document.querySelectorAll('#TableOfContents > ul > li');
+        
+        tocItems.forEach(li => {
+          const subUl = li.querySelector('ul');
+          if (subUl) {
+            li.classList.add('has-children');
+            const link = li.querySelector('a');
+            
+            link.addEventListener('click', (e) => {
+              const isCurrentlyOpen = li.classList.contains('open');
+              
+              // Close all other open submenus to keep sidebar clean
+              tocItems.forEach(item => {
+                item.classList.remove('open');
+                const childUl = item.querySelector('ul');
+                if (childUl) childUl.classList.remove('open');
+              });
+              
+              // Toggle clicked submenu
+              if (!isCurrentlyOpen) {
+                li.classList.add('open');
+                subUl.classList.add('open');
+              }
+            });
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

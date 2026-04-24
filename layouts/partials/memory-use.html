@@ -1,0 +1,93 @@
+      <div class="g4" style="margin-bottom: 0.75rem">
+        <div class="met">
+          <div class="ml">
+            Weights <span class="qbtn" data-pop="weights_memory">?</span>
+          </div>
+          <div class="mv" id="rW">&mdash;</div>
+          <div class="ms">GB</div>
+        </div>
+        <div class="met">
+          <div class="ml" id="rKVL">
+            KV cache <span class="qbtn" data-pop="kv_cache_memory">?</span>
+          </div>
+          <div class="mv" id="rKV">&mdash;</div>
+          <div class="ms">GB</div>
+        </div>
+        <div class="met">
+          <div class="ml" id="rOvL">
+            Overhead <span class="qbtn" data-pop="overhead">?</span>
+          </div>
+          <div class="mv" id="rOv">&mdash;</div>
+          <div class="ms">GB</div>
+        </div>
+        <div class="met" id="ramMet" style="display: none">
+          <div class="ml">
+            RAM offloaded <span class="qbtn" data-pop="ram_overflow">?</span>
+          </div>
+          <div class="mv" id="rRam" style="color: var(--amber)">&mdash;</div>
+          <div class="ms">GB</div>
+        </div>
+      </div>
+      <div class="card">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.4rem;
+          "
+        >
+          <h2 style="margin: 0">Memory use</h2>
+          <span id="bdg" class="bdg">&mdash;</span>
+        </div>
+        <div class="bar-w" id="barWrap">
+          <div class="bar-inner" id="barInner" style="width: 0">
+            <div class="bar-seg bar-wts" id="segWts" style="width: 0"></div>
+            <div class="bar-seg bar-kv" id="segKv" style="width: 0"></div>
+            <div class="bar-seg bar-ov" id="segOv" style="width: 0"></div>
+            <div class="bar-seg bar-ram" id="segRam" style="width: 0"></div>
+          </div>
+        </div>
+        <div class="bar-w-legend">
+          <span
+            ><span class="ldot" style="background: var(--p)"></span
+            >Weights</span
+          >
+          <span
+            ><span class="ldot" style="background: #f59e0b"></span>KV
+            cache</span
+          >
+          <span
+            ><span class="ldot" style="background: #94a3b8"></span
+            >Overhead</span
+          >
+          <span id="legRam" style="display: none"
+            ><span
+              class="ldot"
+              style="
+                background: repeating-linear-gradient(
+                  45deg,
+                  #f59e0b,
+                  #f59e0b 3px,
+                  #d97706 3px,
+                  #d97706 6px
+                );
+              "
+            ></span
+            >RAM offload</span
+          >
+        </div>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--mu);
+            margin-bottom: 0.5rem;
+          "
+        >
+          <span id="usedL">&mdash;</span><span id="totL">&mdash;</span>
+        </div>
+        <div id="bdDiv"></div>
+        <div class="fbx" id="fml"></div>
+      </div>
