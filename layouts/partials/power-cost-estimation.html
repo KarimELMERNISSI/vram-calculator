@@ -1,4 +1,4 @@
-﻿      <!-- POWER & COST CARD -->
+      <!-- POWER & COST CARD -->
       <div class="card powercard" id="powerCard">
         <h2>Power &amp; cost estimation</h2>
         <div class="g3" style="margin-bottom: 0.8rem">
@@ -17,7 +17,7 @@
           </div>
           <div>
             <label
-              >Electricity ($/kWh)
+              >Electricity (<select id="pCurrency" onchange="updateCurrency()" style="background:transparent; border:none; padding:0; margin:0; outline:none; font:inherit; color:inherit; cursor:pointer;"><option value="$">$</option><option value="€">€</option></select>/kWh)
               <span class="qbtn" data-pop="cost_per_kwh">?</span></label
             ><input
               type="number"
@@ -77,17 +77,17 @@
           <div class="cost-met">
             <div class="ml">Cost / hour</div>
             <div class="mv" id="cHr">&mdash;</div>
-            <div class="ms">$</div>
+            <div class="ms currency-sym">$</div>
           </div>
           <div class="cost-met">
             <div class="ml">Cost / month</div>
             <div class="mv" id="cMonth">&mdash;</div>
-            <div class="ms">$</div>
+            <div class="ms currency-sym">$</div>
           </div>
           <div class="cost-met">
             <div class="ml">Cost / 1M tokens</div>
             <div class="mv" id="c1M">&mdash;</div>
-            <div class="ms">$</div>
+            <div class="ms currency-sym">$</div>
           </div>
           <div class="cost-met">
             <div class="ml">Energy / hour</div>
@@ -97,7 +97,7 @@
           <div class="cost-met">
             <div class="ml">Cost / day</div>
             <div class="mv" id="cDay">&mdash;</div>
-            <div class="ms">$</div>
+            <div class="ms currency-sym">$</div>
           </div>
           <div class="cost-met">
             <div class="ml">CO2 / hour</div>

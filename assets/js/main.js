@@ -7,6 +7,18 @@ var gVariants = [];
 var gSelectedVar = -1;
 var gSearchTimer = null;
 var gBranch = "main";
+var currentCurrency = "$";
+
+function updateCurrency() {
+  var pCurrency = document.getElementById("pCurrency");
+  if (pCurrency) {
+    currentCurrency = pCurrency.value;
+    document.querySelectorAll(".currency-sym").forEach(function(el) {
+      el.textContent = currentCurrency;
+    });
+    if (typeof calc === "function") calc();
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
@@ -20,10 +32,10 @@ function fmt(gb) {
   return gb.toFixed(1) + " GB";
 }
 function fmtMoney(v) {
-  if (v >= 1000) return "$" + v.toFixed(0);
-  if (v >= 1) return "$" + v.toFixed(2);
-  if (v >= 0.01) return "$" + v.toFixed(3);
-  return "$" + v.toFixed(4);
+  if (v >= 1000) return currentCurrency + v.toFixed(0);
+  if (v >= 1) return currentCurrency + v.toFixed(2);
+  if (v >= 0.01) return currentCurrency + v.toFixed(3);
+  return currentCurrency + v.toFixed(4);
 }
 function setMode(m) {
   document.getElementById("ftSel").style.display = m === "ft" ? "block" : "none";
