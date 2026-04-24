@@ -9,15 +9,20 @@ var gSearchTimer = null;
 var gBranch = "main";
 var currentCurrency = "$";
 
-function updateCurrency() {
-  var pCurrency = document.getElementById("pCurrency");
-  if (pCurrency) {
-    currentCurrency = pCurrency.value;
-    document.querySelectorAll(".currency-sym").forEach(function(el) {
-      el.textContent = currentCurrency;
+function setCurrency(sym, btn) {
+  currentCurrency = sym;
+  var symEl = document.getElementById("elecCurrencySym");
+  if (symEl) symEl.textContent = sym;
+  document.querySelectorAll(".currency-sym").forEach(function(el) {
+    el.textContent = sym;
+  });
+  if (btn) {
+    document.querySelectorAll(".cur-tab").forEach(function(b) {
+      b.classList.remove("on");
     });
-    if (typeof calc === "function") calc();
+    btn.classList.add("on");
   }
+  if (typeof calc === "function") calc();
 }
 
 // ═══════════════════════════════════════════════════════════
