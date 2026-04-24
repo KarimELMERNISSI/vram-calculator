@@ -1,4 +1,4 @@
-﻿      <!-- CALCULATOR -->
+      <!-- CALCULATOR -->
       <div class="tabs">
         <button class="tab on" onclick="setMode('inf')">Inference</button>
         <button class="tab" onclick="setMode('ft')">Fine-tuning</button>
@@ -38,10 +38,16 @@
           </div>
         </div>
         <div class="card" style="margin-bottom: 0">
-          <h2>Hardware</h2>
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <h2>Hardware</h2>
+            <button class="btn-s" style="font-size: 0.7rem; padding: 3px 8px; cursor: pointer;" onclick="document.getElementById('gpuImportFile').click()">
+              &#x2B07; Import GPU (JSON)
+            </button>
+            <input type="file" id="gpuImportFile" accept=".json" style="display: none;" onchange="importGpuJson(event)" />
+          </div>
           <div style="margin-bottom: 0.6rem">
-            <label>GPU device</label
-            ><select id="gSel" onchange="onGpuChange()"></select>
+            <label>GPU device</label>
+            <select id="gSel" onchange="onGpuChange()"></select>
           </div>
           <div id="customGpuRow" class="custom-gpu-row">
             <div class="g3" style="margin-bottom: 0.5rem">
@@ -254,12 +260,9 @@
                   <span class="qbtn" data-pop="ram_bandwidth">?</span></label
                 >
                 <select id="ramType" onchange="calc()">
-                  <option value="ddr5_2">DDR5 2-ch (89.6 GB/s)</option>
-                  <option value="ddr5_4">DDR5 4-ch (179.2 GB/s)</option>
-                  <option value="ddr5_8">DDR5 8-ch (358.4 GB/s)</option>
-                  <option value="ddr4_2">DDR4 2-ch (51.2 GB/s)</option>
-                  <option value="ddr4_4">DDR4 4-ch (102.4 GB/s)</option>
-                  <option value="ddr4_8">DDR4 8-ch (204.8 GB/s)</option>
+                  {{ range site.Data.ram }}
+                  <option value="{{ .id }}">{{ .name }} ({{ .bw }} GB/s)</option>
+                  {{ end }}
                 </select>
               </div>
             </div>

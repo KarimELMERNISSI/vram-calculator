@@ -9,10 +9,10 @@ var PCIE_BW = { 3: 15.75, 4: 31.5, 5: 63.0 };
 // PCIe practical efficiency for large DMA transfers (TLP overhead, protocol)
 var PCIE_EFFICIENCY = 0.9;
 // RAM bandwidth lookup (theoretical peak, GB/s)
-var RAM_BW = {
-  ddr4_2: 51.2, ddr4_4: 102.4, ddr4_8: 204.8,
-  ddr5_2: 89.6, ddr5_4: 179.2, ddr5_8: 358.4,
-};
+var RAM_BW = {};
+{{ range site.Data.ram }}
+RAM_BW["{{ .id }}"] = {{ .bw }};
+{{ end }}
 // RAM practical efficiency for sequential reads
 var RAM_EFFICIENCY = 0.85;
 // NVLink / Interconnect latency for all-reduce (seconds)

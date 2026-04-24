@@ -85,6 +85,70 @@ function updateTdpFromGpu() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// IMPORT GPU
+// ═══════════════════════════════════════════════════════════
+function importGpuJson(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      var imported = JSON.parse(e.target.result);
+      if (!imported.name || typeof imported.vram !== "number") {
+        throw new Error("Invalid GPU JSON structure. 'name' and 'vram' are required.");
+      }
+      
+      // Ensure default fields exist to avoid breaking calculator
+      var newGpu = {
+        name: imported.name,
+        vram: imported.vram,
+        bw: imported.bw || 1000,
+        tdp: imported.tdp || 300,
+        tflops: imported.tflops || 100,
+        pcieGen: imported.pcieGen || 4,
+        pcieLanes: imported.pcieLanes || 16,
+        nvlink: imported.nvlink || 0,
+        nvswitch: !!imported.nvswitch
+      };
+
+      // Insert into array right before "Custom GPU" (which should be the last element)
+      var customIdx = GPUS.findIndex(function(g) { return g.name === "Custom GPU"; });
+      if (customIdx === -1) customIdx = GPUS.length;
+      GPUS.splice(customIdx, 0, newGpu);
+
+      // Update UI Dropdown
+      var gSel = document.getElementById("gSel");
+      var opt = new Option(newGpu.name + " (" + newGpu.vram + "GB)", newGpu.name);
+      
+      if (customIdx >= gSel.options.length) {
+        gSel.add(opt);
+      } else {
+        gSel.add(opt, gSel.options[customIdx]);
+      }
+      
+      gSel.value = newGpu.name;
+      onGpuChange();
+      
+      // Flash success
+      var btn = event.target.previousElementSibling;
+      var oldText = btn.innerHTML;
+      btn.innerHTML = "✓ Imported!";
+      btn.style.color = "#10b981";
+      setTimeout(function() {
+        btn.innerHTML = oldText;
+        btn.style.color = "";
+      }, 2000);
+
+    } catch (err) {
+      alert("Failed to import GPU: " + err.message);
+    }
+    // Clear input so same file can be uploaded again if needed
+    event.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 (function () {

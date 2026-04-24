@@ -1,0 +1,28 @@
+<div class="gpu-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+  {{ range site.Data.gpus }}
+  {{ if ne .name "Custom GPU" }}
+  <div class="gpu-card" style="border: 1px solid var(--bd); border-radius: 12px; background: #fff; padding: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+    <h3 style="margin-top: 0; color: #0f172a; border-bottom: 2px solid var(--p); padding-bottom: 0.5rem; margin-bottom: 1rem; font-size: 1.2rem;">{{ .name }}</h3>
+    
+    <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem;">
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">VRAM:</strong> <span>{{ .vram }} GB {{ .memoryType }}</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">Bandwidth:</strong> <span>{{ .bw }} GB/s</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">Compute:</strong> <span>{{ .tflops }} TFLOPS (FP16/BF16)</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">TDP:</strong> <span>{{ .tdp }} W</span></div>
+      
+      <div style="height: 1px; background: var(--bd); margin: 0.5rem 0;"></div>
+      
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">Bus Interface:</strong> <span>{{ .bus }}</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">GPU Clock:</strong> <span>{{ .gpuClock }}</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">Memory Clock:</strong> <span>{{ .memoryClock }}</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">Cores/TMUs/ROPs:</strong> <span>{{ .cores }}</span></div>
+      
+      <div style="height: 1px; background: var(--bd); margin: 0.5rem 0;"></div>
+      
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">PCIe Gen:</strong> <span>Gen {{ .pcieGen }} x{{ .pcieLanes }}</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">NVLink:</strong> <span>{{ if eq .nvlink 0 }}None{{ else }}{{ .nvlink }} GB/s{{ end }}</span></div>
+    </div>
+  </div>
+  {{ end }}
+  {{ end }}
+</div>

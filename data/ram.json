@@ -1,0 +1,8 @@
+[
+  { "id": "ddr5_8", "name": "DDR5 8-channel", "bw": 358.4, "speed": "4800-5600 MT/s", "desc": "Enterprise Servers (e.g., AMD EPYC Genoa)" },
+  { "id": "ddr5_4", "name": "DDR5 4-channel", "bw": 179.2, "speed": "4800-5600 MT/s", "desc": "High-End Workstations (e.g., Threadripper Pro)" },
+  { "id": "ddr5_2", "name": "DDR5 2-channel", "bw": 89.6, "speed": "4800-6000 MT/s", "desc": "Mainstream Desktops" },
+  { "id": "ddr4_8", "name": "DDR4 8-channel", "bw": 204.8, "speed": "3200 MT/s", "desc": "Older Enterprise Servers (e.g., AMD EPYC Rome/Milan)" },
+  { "id": "ddr4_4", "name": "DDR4 4-channel", "bw": 102.4, "speed": "3200 MT/s", "desc": "Older High-End Workstations" },
+  { "id": "ddr4_2", "name": "DDR4 2-channel", "bw": 51.2, "speed": "3200 MT/s", "desc": "Older Mainstream Desktops" }
+]

@@ -1,4 +1,4 @@
-# LLM VRAM Calculator — Technical Documentation & Formula Reference
+# Local LLM Resource Estimator — Technical Documentation & Formula Reference
 
 **Author:** Z.ai  
 **Date:** April 2026
@@ -52,7 +52,7 @@
 
 ## 1. Introduction
 
-The LLM VRAM Calculator is a self-contained, browser-based tool designed to estimate the memory requirements, inference performance, and operational costs of deploying Large Language Models (LLMs) on GPU hardware. It integrates directly with the HuggingFace model hub to retrieve real model metadata, including parameter counts, tensor types, quantization configurations, and available quantized variants.
+The Local LLM Resource Estimator is a self-contained, browser-based tool designed to estimate the memory requirements, inference performance, and operational costs of deploying Large Language Models (LLMs) on GPU hardware. It integrates directly with the HuggingFace model hub to retrieve real model metadata, including parameter counts, tensor types, quantization configurations, and available quantized variants.
 
 This document provides the complete mathematical foundation, algorithmic descriptions, and pedagogical references for every calculation performed by the tool. Each formula is derived from first principles and annotated with its assumptions, limitations, and practical implications.
 
@@ -244,9 +244,9 @@ PCI Express (PCIe) is the primary data highway between the CPU and GPU. Its band
 Theoretical PCIe bandwidth is calculated as:
 
 > **Equation 14**  
-> `BW_PCIe,theoretical = R_GT/s × N_lanes × (128/130) ÷ 8`
+> `BW_PCIe,theoretical = R_GT/s × N_lanes × (128/130 (for PCIe Gen 3.0+)) ÷ 8`
 
-where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (typically 16, 8, or 4), and the 128/130 factor accounts for the encoding overhead introduced in PCIe 3.0+.
+where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (typically 16, 8, or 4), and the 128/130 (for PCIe Gen 3.0+) factor accounts for the encoding overhead introduced in PCIe 3.0+.
 
 | Generation | GT/s/lane | x16 (GB/s) | x8 (GB/s) |
 |-----------|-----------|------------|-----------|
@@ -353,7 +353,7 @@ LLM decode is almost always HBM-bandwidth-bound: each token generation requires 
 GPU clock speed (typically 1.5–2.5 GHz) affects compute throughput (TFLOPS) but has limited impact on bandwidth-bound inference. The relationship between clock speed and compute throughput is:
 
 > **Equation 20**  
-> `TFLOPS = N_cores × f_clock × 2 FLOP/clock/core (tensor cores)`
+> `TFLOPS = N_cores × f_clock × 2 FLOP/clock/core (CUDA cores, FMA operation)`
 
 For bandwidth-bound decode, increasing clock speed provides no benefit — the bottleneck is HBM read speed, not compute. Clock speed only matters for compute-bound prefill, where higher TFLOPS directly translates to faster prompt processing.
 
@@ -377,7 +377,7 @@ At Q4 (`b = 0.5`), the arithmetic intensity is only 4 FLOP/byte. At FP16 (`b = 2
 > **Equation 23**  
 > `AI_ridge = TFLOPS / BW_HBM`
 
-For H100: `AI_ridge = 990/3350 ≈ 0.30 TFLOPS/(GB/s) = 295 FLOP/byte`. This confirms that decode is deeply bandwidth-bound regardless of quantization level.
+For H100: `AI_ridge = 1979/3350 ≈ 0.30 TFLOPS/(GB/s) = 591 FLOP/byte`. This confirms that decode is deeply bandwidth-bound regardless of quantization level.
 
 For prefill, the arithmetic intensity is much higher because the same weights are reused across all prompt tokens in a single batched matrix multiplication. Prefill is typically compute-bound.
 
@@ -411,7 +411,7 @@ where `h` is the hidden size and `N` is the number of GPUs. NVSwitch eliminates 
 
 #### AMD Infinity Fabric
 
-AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X uses Infinity Fabric to connect its 8 chiplets (8 compute + 4 I/O) within a single package, providing up to 400 GB/s of inter-chiplet bandwidth.
+AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X uses Infinity Fabric to connect its 12 chiplets (8 XCDs + 4 I/O dies) within a single package, providing up to 400 GB/s of inter-chiplet bandwidth.
 
 #### PCIe Peer-to-Peer (P2P)
 
@@ -591,7 +591,7 @@ Combined with the overhead factor of 2.0, this yields approximately 3× the weig
 
 ### 8.1 GGUF Quantization Levels
 
-GGUF (GPT-Generated Unified Format) is the standard format for llama.cpp and compatible engines. The following table lists supported quantization levels:
+GGUF (GGML GPT-Generated Unified Format) is the standard format for llama.cpp and compatible engines. The following table lists supported quantization levels:
 
 | Level | Label | B/param | Description |
 |-------|-------|---------|-------------|
@@ -658,8 +658,8 @@ The calculator automatically discovers quantized variants by:
 
 | GPU | VRAM (GB) | HBM BW (GB/s) | TFLOPS (FP16) | PCIe Gen | NVLink (GB/s) | NVS |
 |-----|-----------|---------------|---------------|----------|---------------|-----|
-| H200 SXM | 141 | 4800 | 990 | 5 | 900 | Yes |
-| H100 SXM | 80 | 3350 | 990 | 5 | 900 | Yes |
+| H200 SXM | 141 | 4800 | 1979 | 5 | 900 | Yes |
+| H100 SXM | 80 | 3350 | 1979 | 5 | 900 | Yes |
 | H100 PCIe | 80 | 2000 | 756 | 5 | 0 | No |
 | A100 80GB | 80 | 2000 | 312 | 4 | 600 | Yes |
 | A100 40GB | 40 | 1555 | 312 | 4 | 600 | Yes |
@@ -732,7 +732,7 @@ The calculator automatically discovers quantized variants by:
 - **TTFT** — Time to First Token: the latency from receiving a prompt to generating the first output token, dominated by the prefill (prompt processing) phase.
 - **TDP** — Thermal Design Power: the maximum sustained power dissipation a cooling system must handle, used as a proxy for peak GPU power consumption.
 - **QLoRA** — Quantized Low-Rank Adaptation: a parameter-efficient fine-tuning method that quantizes the base model to 4-bit (NF4) and trains small low-rank adapter matrices.
-- **GGUF** — GPT-Generated Unified Format: a file format for storing quantized LLM weights, designed for efficient loading and inference with llama.cpp and compatible engines.
+- **GGUF** — GGML GPT-Generated Unified Format: a file format for storing quantized LLM weights, designed for efficient loading and inference with llama.cpp and compatible engines.
 - **Bus Wall** — Le Mur du Bus: the ratio of GPU HBM bandwidth to the effective transfer bandwidth (PCIe + RAM) for RAM-offloaded layers. Quantifies how many times slower offloaded layers are compared to VRAM-resident layers.
 - **PCIe** — Peripheral Component Interconnect Express: the primary data bus between CPU and GPU, providing 7–57 GB/s effective bandwidth depending on generation and lane count.
 - **NVLink** — NVIDIA's proprietary high-speed GPU-to-GPU interconnect, providing 300–900 GB/s bandwidth for Tensor Parallelism communication.
@@ -742,3 +742,4 @@ The calculator automatically discovers quantized variants by:
 - **Ridge Point** — The arithmetic intensity at which a GPU transitions from bandwidth-bound to compute-bound execution, equal to `TFLOPS / BW_HBM`.
 - **TP** — Tensor Parallelism: a multi-GPU strategy that splits model weights across GPUs, requiring all-reduce communication after each layer.
 - **PP** — Pipeline Parallelism: a multi-GPU strategy that splits model layers across GPUs sequentially, requiring only activation tensor communication between stages.
+

@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>LLM VRAM Calculator v8</title>
-    <meta name="description" content="A professional LLM VRAM Calculator with Hugging Face integration, performance roofline model, and cost estimation." />
+    <title>Local LLM Resource Estimator</title>
+    <meta name="description" content="A professional Local LLM Resource Estimator with Hugging Face integration, performance roofline model, and cost estimation." />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     {{ $css := resources.Get "css/calculator.css" }}
@@ -13,8 +13,12 @@
   <body>
     <div style="max-width: 1100px; margin: 0 auto">
       <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem;">
-        <h1 style="font-size: 1.5rem; font-weight: 800; color: #0f172a; margin: 0;">LLM VRAM Calculator</h1>
-        <a href="{{ site.BaseURL }}documentation/" style="color: #cc0000; font-weight: 700; font-size: 0.85rem; text-decoration: none;">📄 View Technical Documentation</a>
+        <h1 style="font-size: 1.5rem; font-weight: 800; color: #0f172a; margin: 0;">Local LLM Resource Estimator</h1>
+        <div style="display: flex; gap: 1rem;">
+          <a href="{{ site.BaseURL }}hardware/" style="color: #64748b; font-weight: 700; font-size: 0.85rem; text-decoration: none;">🖥️ Hardware Cards</a>
+          <a href="{{ site.BaseURL }}gpu_architecture_reference/" style="color: #0284c7; font-weight: 700; font-size: 0.85rem; text-decoration: none;">🧠 GPU Architecture Reference</a>
+          <a href="{{ site.BaseURL }}documentation/" style="color: #cc0000; font-weight: 700; font-size: 0.85rem; text-decoration: none;">📄 Technical Documentation</a>
+        </div>
       </div>
       {{ partial "hf-import.html" . }}
       {{ partial "calculator-inputs.html" . }}
@@ -24,8 +28,8 @@
     </div>
 
     {{/* Concatenate JS in dependency order */}}
-    {{ $models    := resources.Get "js/data/models.js" }}
-    {{ $constants := resources.Get "js/data/constants.js" }}
+    {{ $models    := resources.Get "js/data/models.js" | resources.ExecuteAsTemplate "js/data/models.js" . }}
+    {{ $constants := resources.Get "js/data/constants.js" | resources.ExecuteAsTemplate "js/data/constants.js" . }}
     {{ $popovers  := resources.Get "js/data/popovers.js" }}
     {{ $formulas  := resources.Get "js/data/formulas.js" }}
     {{ $popover   := resources.Get "js/popover.js" }}

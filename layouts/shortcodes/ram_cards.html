@@ -1,0 +1,19 @@
+<div class="ram-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+  {{ range site.Data.ram }}
+  <div class="ram-card" style="border: 1px solid var(--bd); border-radius: 12px; background: #fff; padding: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+    <h3 style="margin-top: 0; color: #0f172a; border-bottom: 2px solid var(--p); padding-bottom: 0.5rem; margin-bottom: 1rem; font-size: 1.2rem;">{{ .name }}</h3>
+    
+    <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem;">
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">Bandwidth:</strong> <span>{{ .bw }} GB/s</span></div>
+      <div style="display: flex; justify-content: space-between;"><strong style="color: #64748b;">Transfer Speed:</strong> <span>{{ .speed }}</span></div>
+      
+      <div style="height: 1px; background: var(--bd); margin: 0.5rem 0;"></div>
+      
+      <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+        <strong style="color: #64748b;">Typical Use Case:</strong>
+        <span style="color: #334155; line-height: 1.4;">{{ .desc }}</span>
+      </div>
+    </div>
+  </div>
+  {{ end }}
+</div>
