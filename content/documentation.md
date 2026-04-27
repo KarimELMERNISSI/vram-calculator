@@ -674,7 +674,10 @@ _Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubl
 - **TTFT** — Time to First Token: the latency from receiving a prompt to generating the first output token, dominated by the prefill (prompt processing) phase.
 - **TDP** — Thermal Design Power: the maximum sustained power dissipation a cooling system must handle, used as a proxy for peak GPU power consumption.
 - **QLoRA** — Quantized Low-Rank Adaptation: a parameter-efficient fine-tuning method that quantizes the base model to 4-bit (NF4) and trains small low-rank adapter matrices.
-- **GGUF** — GGML GGML GPT-Generated Unified Format: a file format for storing quantized LLM weights, designed for efficient loading and inference with llama.cpp and compatible engines.
+- **GGUF** — GGUF is the binary file format introduced by the llama.cpp project as a
+  successor to the older GGML format. The name is not an official acronym —
+  it is commonly rendered as "GGUF" without expansion. It is the standard
+  format for llama.cpp and compatible inference engines.
 - **Bus Wall** — Le Mur du Bus: the ratio of GPU HBM bandwidth to the effective transfer bandwidth (PCIe + RAM) for RAM-offloaded layers. Quantifies how many times slower offloaded layers are compared to VRAM-resident layers.
 - **PCIe** — Peripheral Component Interconnect Express: the primary data bus between CPU and GPU, providing 7–57 GB/s effective bandwidth depending on generation and lane count.
 - **NVLink** — NVIDIA's proprietary high-speed GPU-to-GPU interconnect, providing 300–900 GB/s bandwidth for Tensor Parallelism communication.
