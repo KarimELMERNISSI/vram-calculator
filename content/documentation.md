@@ -687,3 +687,5 @@ _Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubl
 - **Ridge Point** — The arithmetic intensity at which a GPU transitions from bandwidth-bound to compute-bound execution, equal to `TFLOPS / BW_HBM`.
 - **TP** — Tensor Parallelism: a multi-GPU strategy that splits model weights across GPUs, requiring all-reduce communication after each layer.
 - **PP** — Pipeline Parallelism: a multi-GPU strategy that splits model layers across GPUs sequentially, requiring only activation tensor communication between stages.
+- **Dense TFLOPS** — Compute throughput calculated without assuming structural sparsity. Every operation in the matrix multiply is explicitly computed.
+- **Sparse TFLOPS** — Compute throughput assuming structured sparsity (e.g., 2:4 sparsity where 2 out of every 4 elements are zero). This allows specialized hardware (like Tensor Cores) to skip zero-multiplies, effectively doubling the theoretical throughput for supported operations.
