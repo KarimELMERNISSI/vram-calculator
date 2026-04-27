@@ -1,6 +1,6 @@
-# Local LLM Resource Estimator — Technical Documentation & Formula Reference
+# LLM VRAM Calculator — Technical Documentation & Formula Reference
 
-**Author:** Z.ai  
+**Author:** Karim El Mernissi
 **Date:** April 2026
 
 ---
@@ -9,14 +9,14 @@
 
 1. [Introduction](#introduction)  
    1.1 [Design Philosophy](#design-philosophy)  
-   1.2 [Scope](#scope)  
+   1.2 [Scope](#scope)
 2. [VRAM Estimation Model](#vram-estimation-model)  
    2.1 [Model Weight Memory](#model-weight-memory)  
    2.2 [KV Cache Memory](#kv-cache-memory)  
-   2.3 [Framework Overhead](#framework-overhead)  
+   2.3 [Framework Overhead](#framework-overhead)
 3. [RAM Overflow / Offloading](#ram-overflow--offloading)  
    3.1 [The Bus Wall ("Le Mur du Bus")](#the-bus-wall-le-mur-du-bus)  
-   3.2 [Improved RAM Offload Performance Model](#improved-ram-offload-performance-model)  
+   3.2 [Improved RAM Offload Performance Model](#improved-ram-offload-performance-model)
 4. [Connectivity & Bandwidth Architecture](#connectivity--bandwidth-architecture)  
    4.1 [The Data Path Hierarchy](#the-data-path-hierarchy)  
    4.2 [PCIe Bus Architecture](#pcie-bus-architecture)  
@@ -25,34 +25,34 @@
    4.5 [GPU Internal Architecture & HBM](#gpu-internal-architecture--hbm)  
    4.6 [Multi-GPU Interconnectivity](#multi-gpu-interconnectivity)  
    4.7 [Tensor Parallelism vs. Pipeline Parallelism](#tensor-parallelism-vs-pipeline-parallelism)  
-   4.8 [Combined Performance Model](#combined-performance-model)  
+   4.8 [Combined Performance Model](#combined-performance-model)
 5. [Performance Estimation](#performance-estimation)  
    5.1 [Decode Speed (Tokens per Second)](#decode-speed-tokens-per-second)  
    5.2 [Time to First Token (TTFT)](#time-to-first-token-ttft)  
-   5.3 [Extended Performance Metrics](#extended-performance-metrics)  
+   5.3 [Extended Performance Metrics](#extended-performance-metrics)
 6. [Power & Cost Estimation](#power--cost-estimation)  
    6.1 [Power Model](#power-model)  
    6.2 [Energy and Cost Calculations](#energy-and-cost-calculations)  
-   6.3 [Carbon Emissions](#carbon-emissions)  
+   6.3 [Carbon Emissions](#carbon-emissions)
 7. [Fine-Tuning Memory Model](#fine-tuning-memory-model)  
    7.1 [LoRA / QLoRA](#lora--qlora)  
-   7.2 [Full Fine-Tuning](#full-fine-tuning)  
+   7.2 [Full Fine-Tuning](#full-fine-tuning)
 8. [Quantization Reference](#quantization-reference)  
    8.1 [GGUF Quantization Levels](#gguf-quantization-levels)  
-   8.2 [Weighted Quantization Methods](#weighted-quantization-methods)  
+   8.2 [Weighted Quantization Methods](#weighted-quantization-methods)
 9. [HuggingFace Integration](#huggingface-integration)  
    9.1 [Model Metadata Retrieval](#model-metadata-retrieval)  
    9.2 [Tensor Type Detection](#tensor-type-detection)  
-   9.3 [Quantized Variant Discovery](#quantized-variant-discovery)  
-10. [Hardware Reference](#hardware-reference)  
-11. [Limitations & Assumptions](#limitations--assumptions)  
-12. [Glossary](#glossary)  
+   9.3 [Quantized Variant Discovery](#quantized-variant-discovery)
+10. [Hardware Reference](#hardware-reference)
+11. [Limitations & Assumptions](#limitations--assumptions)
+12. [Glossary](#glossary)
 
 ---
 
 ## 1. Introduction
 
-The Local LLM Resource Estimator is a self-contained, browser-based tool designed to estimate the memory requirements, inference performance, and operational costs of deploying Large Language Models (LLMs) on GPU hardware. It integrates directly with the HuggingFace model hub to retrieve real model metadata, including parameter counts, tensor types, quantization configurations, and available quantized variants.
+The LLM VRAM Calculator is a self-contained, browser-based tool designed to estimate the memory requirements, inference performance, and operational costs of deploying Large Language Models (LLMs) on GPU hardware. It integrates directly with the HuggingFace model hub to retrieve real model metadata, including parameter counts, tensor types, quantization configurations, and available quantized variants.
 
 This document provides the complete mathematical foundation, algorithmic descriptions, and pedagogical references for every calculation performed by the tool. Each formula is derived from first principles and annotated with its assumptions, limitations, and practical implications.
 
@@ -86,23 +86,23 @@ The dominant memory component is the storage of model weights. Its size is deter
 > `V_weights = P_total × b_param`
 
 **Definition — Total Parameters:**  
-`P_total` is the total number of learnable parameters in the model, including *all* experts for Mixture-of-Experts (MoE) architectures. For dense models, `P_total = P_active`. For MoE models, `P_total ≫ P_active` since only a subset of experts is activated per token.
+`P_total` is the total number of learnable parameters in the model, including _all_ experts for Mixture-of-Experts (MoE) architectures. For dense models, `P_total = P_active`. For MoE models, `P_total ≫ P_active` since only a subset of experts is activated per token.
 
 **Definition — Bytes per Parameter:**  
 `b_param` denotes the number of bytes used to store each weight parameter. This depends on the chosen precision or quantization level. The table below lists common values.
 
-| Precision | Bits | B/param | Notes |
-|-----------|------|---------|-------|
-| FP32 | 32 | 4.00 | Full precision, rarely used for inference |
-| BF16 / FP16 | 16 | 2.00 | Standard training & inference precision |
-| FP8 / INT8 | 8 | 1.00 | 8-bit quantization |
-| Q8_0 | 8 | 1.06 | GGUF 8-bit with overhead |
-| Q6_K | 6 | 0.83 | 6-bit K-quant |
-| Q5_K_M | 5 | 0.71 | 5-bit medium K-quant |
-| Q4_K_M | 4 | 0.60 | 4-bit medium K-quant |
-| Q4 / NF4 | 4 | 0.50 | 4-bit quantization, QLoRA default |
-| Q3_K_M | 3 | 0.43 | 3-bit medium K-quant |
-| Q2_K | 2 | 0.32 | 2-bit K-quant (aggressive) |
+| Precision   | Bits | B/param | Notes                                     |
+| ----------- | ---- | ------- | ----------------------------------------- |
+| FP32        | 32   | 4.00    | Full precision, rarely used for inference |
+| BF16 / FP16 | 16   | 2.00    | Standard training & inference precision   |
+| FP8 / INT8  | 8    | 1.00    | 8-bit quantization                        |
+| Q8_0        | 8    | 1.06    | GGUF 8-bit with overhead                  |
+| Q6_K        | 6    | 0.83    | 6-bit K-quant                             |
+| Q5_K_M      | 5    | 0.71    | 5-bit medium K-quant                      |
+| Q4_K_M      | 4    | 0.60    | 4-bit medium K-quant                      |
+| Q4 / NF4    | 4    | 0.50    | 4-bit quantization, QLoRA default         |
+| Q3_K_M      | 3    | 0.43    | 3-bit medium K-quant                      |
+| Q2_K        | 2    | 0.32    | 2-bit K-quant (aggressive)                |
 
 ### 2.2 KV Cache Memory
 
@@ -127,11 +127,11 @@ where the factor of 2 accounts for separate Key and Value tensors.
 
 The number of KV heads `n_kv` varies significantly across attention architectures, directly impacting KV cache memory:
 
-| Architecture | KV Heads | Description |
-|-------------|----------|-------------|
-| Multi-Head (MHA) | `n_kv = n_q` | Each query head has its own KV pair. Largest KV cache. |
-| Grouped-Query (GQA) | `1 < n_kv < n_q` | Query heads share KV heads in groups. Good balance. |
-| Multi-Query (MQA) | `n_kv = 1` | All query heads share a single KV head. Smallest cache. |
+| Architecture        | KV Heads         | Description                                             |
+| ------------------- | ---------------- | ------------------------------------------------------- |
+| Multi-Head (MHA)    | `n_kv = n_q`     | Each query head has its own KV pair. Largest KV cache.  |
+| Grouped-Query (GQA) | `1 < n_kv < n_q` | Query heads share KV heads in groups. Good balance.     |
+| Multi-Query (MQA)   | `n_kv = 1`       | All query heads share a single KV head. Smallest cache. |
 
 For example, Llama 3.1 70B uses GQA with `n_q = 64` query heads but only `n_kv = 8` KV heads, reducing KV cache memory by 8× compared to MHA.
 
@@ -153,11 +153,11 @@ Framework overhead includes CUDA kernels, temporary buffers, activation memory, 
 
 where `f_overhead` varies by operation mode:
 
-| Mode | f_overhead |
-|------|-----------|
-| Inference | 0.12 (12%) |
-| LoRA / QLoRA fine-tuning | 0.40 (40%) |
-| Full fine-tuning | 2.00 (200%) |
+| Mode                     | f_overhead  |
+| ------------------------ | ----------- |
+| Inference                | 0.12 (12%)  |
+| LoRA / QLoRA fine-tuning | 0.40 (40%)  |
+| Full fine-tuning         | 2.00 (200%) |
 
 For full fine-tuning, the overhead factor of 2.0 accounts for gradients (1× weights in training precision) and AdamW optimizer states (8 bytes per parameter in FP32), plus activation memory.
 
@@ -226,12 +226,12 @@ This section provides the complete theoretical foundation for the data transfer 
 
 Data involved in LLM inference traverses a strict hierarchy of interconnects, each with vastly different bandwidth characteristics:
 
-| Path | Interconnect | BW Range | Use Case |
-|------|-------------|----------|----------|
-| GPU HBM | On-die bus | 900–4800 GB/s | VRAM-resident weight reading |
-| NVLink/NVSwitch | GPU-GPU link | 400–900 GB/s | Tensor Parallelism all-reduce |
-| PCIe | CPU-GPU bus | 7–57 GB/s eff. | RAM offload data transfer |
-| System RAM | Memory bus | 43–304 GB/s eff. | Offloaded weight storage |
+| Path            | Interconnect | BW Range         | Use Case                      |
+| --------------- | ------------ | ---------------- | ----------------------------- |
+| GPU HBM         | On-die bus   | 900–4800 GB/s    | VRAM-resident weight reading  |
+| NVLink/NVSwitch | GPU-GPU link | 400–900 GB/s     | Tensor Parallelism all-reduce |
+| PCIe            | CPU-GPU bus  | 7–57 GB/s eff.   | RAM offload data transfer     |
+| System RAM      | Memory bus   | 43–304 GB/s eff. | Offloaded weight storage      |
 
 The key insight is that each level in this hierarchy is roughly 10–100× slower than the one above it. This creates a "bandwidth cliff" when inference must access slower paths.
 
@@ -244,15 +244,15 @@ PCI Express (PCIe) is the primary data highway between the CPU and GPU. Its band
 Theoretical PCIe bandwidth is calculated as:
 
 > **Equation 14**  
-> `BW_PCIe,theoretical = R_GT/s × N_lanes × (128/130 (for PCIe Gen 3.0+)) ÷ 8`
+> `BW_PCIe,theoretical = R_GT/s × N_lanes × (128/130) ÷ 8`
 
-where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (typically 16, 8, or 4), and the 128/130 (for PCIe Gen 3.0+) factor accounts for the encoding overhead introduced in PCIe 3.0+.
+where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (typically 16, 8, or 4), and the 128/130 factor accounts for the encoding overhead introduced in PCIe 3.0+.
 
 | Generation | GT/s/lane | x16 (GB/s) | x8 (GB/s) |
-|-----------|-----------|------------|-----------|
-| PCIe 3.0 | 8 | 15.75 | 7.88 |
-| PCIe 4.0 | 16 | 31.50 | 15.75 |
-| PCIe 5.0 | 32 | 63.00 | 31.50 |
+| ---------- | --------- | ---------- | --------- |
+| PCIe 3.0   | 8         | 15.75      | 7.88      |
+| PCIe 4.0   | 16        | 31.50      | 15.75     |
+| PCIe 5.0   | 32        | 63.00      | 31.50     |
 
 #### Practical PCIe Efficiency
 
@@ -289,14 +289,14 @@ System RAM bandwidth is determined by the memory type, transfer rate, and number
 > **Equation 16**  
 > `BW_RAM,theoretical = MT/s × N_channels × 8 bytes/transfer`
 
-| Configuration | MT/s | Channels | BW (GB/s) |
-|--------------|------|----------|-----------|
-| DDR4-3200 2-ch | 3200 | 2 | 51.2 |
-| DDR4-3200 4-ch | 3200 | 4 | 102.4 |
-| DDR4-3200 8-ch | 3200 | 8 | 204.8 |
-| DDR5-5600 2-ch | 5600 | 2 | 89.6 |
-| DDR5-5600 4-ch | 5600 | 4 | 179.2 |
-| DDR5-5600 8-ch | 5600 | 8 | 358.4 |
+| Configuration  | MT/s | Channels | BW (GB/s) |
+| -------------- | ---- | -------- | --------- |
+| DDR4-3200 2-ch | 3200 | 2        | 51.2      |
+| DDR4-3200 4-ch | 3200 | 4        | 102.4     |
+| DDR4-3200 8-ch | 3200 | 8        | 204.8     |
+| DDR5-5600 2-ch | 5600 | 2        | 89.6      |
+| DDR5-5600 4-ch | 5600 | 4        | 179.2     |
+| DDR5-5600 8-ch | 5600 | 8        | 358.4     |
 
 #### Practical RAM Efficiency
 
@@ -340,11 +340,11 @@ In most configurations, PCIe is the bottleneck. Even DDR4 2-channel at 51.2 GB/s
 GPU HBM is the fastest memory in the inference data path, connected to the GPU die via an ultra-wide bus (3072–6144 bits) on an organic or silicon interposer. This provides bandwidth of 900–4800 GB/s, orders of magnitude faster than any external interconnect.
 
 | Memory Type | Example GPU | Bandwidth | Bus Width |
-|------------|------------|-----------|-----------|
-| GDDR6X | RTX 4090 | 1008 GB/s | 384-bit |
-| HBM2e | A100 | 2000 GB/s | 5120-bit |
-| HBM3 | H100 SXM | 3350 GB/s | 5120-bit |
-| HBM3e | H200 SXM | 4800 GB/s | 6144-bit |
+| ----------- | ----------- | --------- | --------- |
+| GDDR6X      | RTX 4090    | 1008 GB/s | 384-bit   |
+| HBM2e       | A100        | 2000 GB/s | 5120-bit  |
+| HBM3        | H100 SXM    | 3350 GB/s | 5120-bit  |
+| HBM3e       | H200 SXM    | 4800 GB/s | 6144-bit  |
 
 LLM decode is almost always HBM-bandwidth-bound: each token generation requires reading ALL active weights from HBM, but only performs `2/b` FLOPs per byte of weight data (where `b` is bytes per parameter). This arithmetic intensity is far below the GPU's ridge point, confirming the bandwidth-bound nature of decode.
 
@@ -353,7 +353,7 @@ LLM decode is almost always HBM-bandwidth-bound: each token generation requires 
 GPU clock speed (typically 1.5–2.5 GHz) affects compute throughput (TFLOPS) but has limited impact on bandwidth-bound inference. The relationship between clock speed and compute throughput is:
 
 > **Equation 20**  
-> `TFLOPS = N_cores × f_clock × 2 FLOP/clock/core (CUDA cores, FMA operation)`
+> `TFLOPS = N_cores × f_clock × 2 FLOP/clock/core (tensor cores)`
 
 For bandwidth-bound decode, increasing clock speed provides no benefit — the bottleneck is HBM read speed, not compute. Clock speed only matters for compute-bound prefill, where higher TFLOPS directly translates to faster prompt processing.
 
@@ -377,7 +377,7 @@ At Q4 (`b = 0.5`), the arithmetic intensity is only 4 FLOP/byte. At FP16 (`b = 2
 > **Equation 23**  
 > `AI_ridge = TFLOPS / BW_HBM`
 
-For H100: `AI_ridge = 1979/3350 ≈ 0.30 TFLOPS/(GB/s) = 591 FLOP/byte`. This confirms that decode is deeply bandwidth-bound regardless of quantization level.
+For H100: `AI_ridge = 989/3350 ≈ 0.29 TFLOPS/(GB/s) = 295 FLOP/byte`. This confirms that decode is deeply bandwidth-bound regardless of quantization level.
 
 For prefill, the arithmetic intensity is much higher because the same weights are reused across all prompt tokens in a single batched matrix multiplication. Prefill is typically compute-bound.
 
@@ -388,10 +388,10 @@ For prefill, the arithmetic intensity is much higher because the same weights ar
 NVLink is NVIDIA's proprietary high-speed GPU-to-GPU interconnect. It provides dramatically higher bandwidth than PCIe, enabling efficient Tensor Parallelism (TP) where model weights are split across multiple GPUs.
 
 | Generation | Links | BW per GPU | Example GPU |
-|-----------|-------|------------|-------------|
-| NVLink 2 | 6 | 300 GB/s | V100 |
-| NVLink 3 | 12 | 600 GB/s | A100 |
-| NVLink 4 | 18 | 900 GB/s | H100/H200 |
+| ---------- | ----- | ---------- | ----------- |
+| NVLink 2   | 6     | 300 GB/s   | V100        |
+| NVLink 3   | 12    | 600 GB/s   | A100        |
+| NVLink 4   | 18    | 900 GB/s   | H100/H200   |
 
 NVLink uses a point-to-point topology: each GPU has direct links to specific other GPUs. In a 4-GPU system, this creates a mesh where each GPU connects to every other GPU. In an 8-GPU system, each GPU typically connects to 4 neighbors, and multi-hop routing is required for non-adjacent communication.
 
@@ -411,7 +411,7 @@ where `h` is the hidden size and `N` is the number of GPUs. NVSwitch eliminates 
 
 #### AMD Infinity Fabric
 
-AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X is a multi-chiplet accelerator integrating 8 compute dies (XCDs) and 4 I/O dies — 12 chiplets in total — connected via AMD Infinity Fabric within the package. It provides 192 GB of HBM3 memory at 5,300 GB/s aggregate bandwidth. For multi-GPU scaling, each discrete MI300X offers a 16-lane PCIe® Gen 5 host interface and seven external AMD Infinity Fabric links (each at 128 GB/s bidirectional), allowing full all-to-all connectivity between eight GPUs in a ring topology.
+AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X uses Infinity Fabric to connect its 8 chiplets (8 compute + 4 I/O) within a single package, providing up to 400 GB/s of inter-chiplet bandwidth.
 
 #### PCIe Peer-to-Peer (P2P)
 
@@ -435,11 +435,11 @@ TP efficiency is:
 > **Equation 27**  
 > `η_TP = T_compute / (T_compute + T_communication)`
 
-| Interconnect | 2-GPU | 4-GPU | 8-GPU |
-|-------------|-------|-------|-------|
-| NVSwitch (H100) | 96% | 93% | 88% |
-| NVLink P2P (H100) | 94% | 87% | 75% |
-| PCIe Gen4 x16 | 65% | 40% | 20% |
+| Interconnect      | 2-GPU | 4-GPU | 8-GPU |
+| ----------------- | ----- | ----- | ----- |
+| NVSwitch (H100)   | 96%   | 93%   | 88%   |
+| NVLink P2P (H100) | 94%   | 87%   | 75%   |
+| PCIe Gen4 x16     | 65%   | 40%   | 20%   |
 
 TP is the preferred strategy when NVLink or NVSwitch is available, as it provides near-linear scaling with minimal latency overhead.
 
@@ -504,13 +504,13 @@ where `C` is the prompt length in tokens. The factor of 2 accounts for the read 
 
 The calculator provides additional derived metrics for practical deployment planning:
 
-> `Latency per token = 1000 / TPS` ms &nbsp;&nbsp; *(Equation 32)*
+> `Latency per token = 1000 / TPS` ms &nbsp;&nbsp; _(Equation 32)_
 
-> `Time_100 = TTFT/1000 + 100/TPS` seconds &nbsp;&nbsp; *(Equation 33)*
+> `Time_100 = TTFT/1000 + 100/TPS` seconds &nbsp;&nbsp; _(Equation 33)_
 
-> `Time_1000 = TTFT/1000 + 1000/TPS` seconds &nbsp;&nbsp; *(Equation 34)*
+> `Time_1000 = TTFT/1000 + 1000/TPS` seconds &nbsp;&nbsp; _(Equation 34)_
 
-> `Throughput = TPS × U` tok/s total &nbsp;&nbsp; *(Equation 35)*
+> `Throughput = TPS × U` tok/s total &nbsp;&nbsp; _(Equation 35)_
 
 ---
 
@@ -527,35 +527,35 @@ where `U_GPU` is the GPU utilization percentage. LLM inference is typically memo
 
 ### 6.2 Energy and Cost Calculations
 
-> `E_hour = P_draw / 1000` kWh &nbsp;&nbsp; *(Equation 37)*
+> `E_hour = P_draw / 1000` kWh &nbsp;&nbsp; _(Equation 37)_
 
-> `C_hour = E_hour × R_elec` &nbsp;&nbsp; *(Equation 38)*
+> `C_hour = E_hour × R_elec` &nbsp;&nbsp; _(Equation 38)_
 
-> `C_day = C_hour × H_day` &nbsp;&nbsp; *(Equation 39)*
+> `C_day = C_hour × H_day` &nbsp;&nbsp; _(Equation 39)_
 
-> `C_month = C_day × 30` &nbsp;&nbsp; *(Equation 40)*
+> `C_month = C_day × 30` &nbsp;&nbsp; _(Equation 40)_
 
-> `C_1M tok = (C_hour / (TPS × 3600)) × 10⁶` &nbsp;&nbsp; *(Equation 41)*
+> `C_1M tok = (C_hour / (TPS × 3600)) × 10⁶` &nbsp;&nbsp; _(Equation 41)_
 
 where `R_elec` is the electricity rate ($/kWh), `H_day` is operating hours per day, and TPS is the decode speed.
 
 ### 6.3 Carbon Emissions
 
-> `CO₂,hour = E_hour × I_carbon` &nbsp;&nbsp; *(Equation 42)*
+> `CO₂,hour = E_hour × I_carbon` &nbsp;&nbsp; _(Equation 42)_
 
-> `CO₂,annual = CO₂,hour × H_day × 365 / 1000` tonnes &nbsp;&nbsp; *(Equation 43)*
+> `CO₂,annual = CO₂,hour × H_day × 365 / 1000` tonnes &nbsp;&nbsp; _(Equation 43)_
 
 where `I_carbon` is the grid carbon intensity in kg CO₂/kWh. Default values and regional references:
 
-| Region | kg CO₂/kWh |
-|--------|-----------|
-| World average | 0.417 |
-| European Union | 0.255 |
-| United States | 0.387 |
-| France (nuclear) | 0.056 |
-| Sweden (hydro) | 0.045 |
-| Poland (coal) | 0.769 |
-| China | 0.555 |
+| Region           | kg CO₂/kWh |
+| ---------------- | ---------- |
+| World average    | 0.417      |
+| European Union   | 0.255      |
+| United States    | 0.387      |
+| France (nuclear) | 0.056      |
+| Sweden (hydro)   | 0.045      |
+| Poland (coal)    | 0.769      |
+| China            | 0.555      |
 
 ---
 
@@ -579,9 +579,9 @@ This accounts for LoRA weights (typically <1% of base weights), their gradients 
 
 Full fine-tuning requires gradients for all parameters and optimizer states:
 
-> `V_gradients = P_total × b_train` &nbsp;&nbsp; *(Equation 46)*
+> `V_gradients = P_total × b_train` &nbsp;&nbsp; _(Equation 46)_
 
-> `V_optimizer = P_total × 8` (AdamW FP32: momentum + variance) &nbsp;&nbsp; *(Equation 47)*
+> `V_optimizer = P_total × 8` (AdamW FP32: momentum + variance) &nbsp;&nbsp; _(Equation 47)_
 
 Combined with the overhead factor of 2.0, this yields approximately 3× the weight memory for FP16 training with AdamW.
 
@@ -591,33 +591,33 @@ Combined with the overhead factor of 2.0, this yields approximately 3× the weig
 
 ### 8.1 GGUF Quantization Levels
 
-GGUF (GGML GPT-Generated Unified Format) is the standard format for llama.cpp and compatible engines. The following table lists supported quantization levels:
+GGUF (GPT-Generated Unified Format) is the standard format for llama.cpp and compatible engines. The following table lists supported quantization levels:
 
-| Level | Label | B/param | Description |
-|-------|-------|---------|-------------|
-| Q2_K | 2-bit K-quant | 0.32 | Aggressive 2-bit quantization, K-quants method |
-| Q3_K_S | 3-bit small | 0.34 | 3-bit quantization, small variant |
-| Q3_K_M | 3-bit medium | 0.43 | 3-bit quantization, medium variant |
-| Q3_K_L | 3-bit large | 0.45 | 3-bit quantization, large variant |
-| Q4_0 | 4-bit base | 0.56 | Basic 4-bit quantization |
-| Q4_K_S | 4-bit small K | 0.58 | 4-bit K-quant, small variant |
-| Q4_K_M | 4-bit medium K | 0.60 | 4-bit K-quant, medium variant |
-| Q5_0 | 5-bit base | 0.68 | Basic 5-bit quantization |
-| Q5_K_S | 5-bit small K | 0.69 | 5-bit K-quant, small variant |
-| Q5_K_M | 5-bit medium K | 0.71 | 5-bit K-quant, medium variant |
-| Q6_K | 6-bit K-quant | 0.83 | 6-bit K-quant |
-| Q8_0 | 8-bit quant | 1.06 | Near-FP16 quality, 8-bit quantization |
+| Level  | Label          | B/param | Description                                    |
+| ------ | -------------- | ------- | ---------------------------------------------- |
+| Q2_K   | 2-bit K-quant  | 0.32    | Aggressive 2-bit quantization, K-quants method |
+| Q3_K_S | 3-bit small    | 0.34    | 3-bit quantization, small variant              |
+| Q3_K_M | 3-bit medium   | 0.43    | 3-bit quantization, medium variant             |
+| Q3_K_L | 3-bit large    | 0.45    | 3-bit quantization, large variant              |
+| Q4_0   | 4-bit base     | 0.56    | Basic 4-bit quantization                       |
+| Q4_K_S | 4-bit small K  | 0.58    | 4-bit K-quant, small variant                   |
+| Q4_K_M | 4-bit medium K | 0.60    | 4-bit K-quant, medium variant                  |
+| Q5_0   | 5-bit base     | 0.68    | Basic 5-bit quantization                       |
+| Q5_K_S | 5-bit small K  | 0.69    | 5-bit K-quant, small variant                   |
+| Q5_K_M | 5-bit medium K | 0.71    | 5-bit K-quant, medium variant                  |
+| Q6_K   | 6-bit K-quant  | 0.83    | 6-bit K-quant                                  |
+| Q8_0   | 8-bit quant    | 1.06    | Near-FP16 quality, 8-bit quantization          |
 
 ### 8.2 Weighted Quantization Methods
 
 Beyond GGUF, the calculator recognizes several weighted quantization formats commonly found on HuggingFace:
 
-| Method | Typical Bits | Characteristics |
-|--------|-------------|-----------------|
-| GPTQ | 2–8 bits | Post-training quantization with calibration dataset; group-wise quantization with optional desc_act; commonly 4-bit with group_size=128 |
-| AWQ | 4–8 bits | Activation-aware weight quantization; preserves salient weights; group-wise with zero-point |
-| EXL2 | 2–8 bits | ExLlamaV2 format; mixed-precision per-layer quantization; optimized for ExLlamaV2 inference engine |
-| BNB/NF4 | 4 bits | BitsAndBytes NF4 quantization; default for QLoRA; double quantization support |
+| Method  | Typical Bits | Characteristics                                                                                                                         |
+| ------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| GPTQ    | 2–8 bits     | Post-training quantization with calibration dataset; group-wise quantization with optional desc_act; commonly 4-bit with group_size=128 |
+| AWQ     | 4–8 bits     | Activation-aware weight quantization; preserves salient weights; group-wise with zero-point                                             |
+| EXL2    | 2–8 bits     | ExLlamaV2 format; mixed-precision per-layer quantization; optimized for ExLlamaV2 inference engine                                      |
+| BNB/NF4 | 4 bits       | BitsAndBytes NF4 quantization; default for QLoRA; double quantization support                                                           |
 
 ---
 
@@ -654,43 +654,56 @@ The calculator automatically discovers quantized variants by:
 
 ## 10. Hardware Reference
 
+### Dense vs. Sparse TFLOPS
+
+GPU compute throughput is reported in two variants that must be clearly distinguished:
+
+**Dense TFLOPS** — Compute throughput calculated without assuming structural sparsity. Every operation in the matrix multiply is explicitly computed. This is the baseline metric that applies to all workloads regardless of weight structure.
+
+**Sparse TFLOPS** — Compute throughput assuming structured sparsity (e.g., 2:4 sparsity where 2 out of every 4 elements are zero). This allows specialized hardware (like NVIDIA Tensor Cores starting from Ampere) to skip zero-multiplies, effectively doubling the theoretical throughput for supported operations. Sparse TFLOPS = 2 × Dense TFLOPS on hardware that supports 2:4 structured sparsity.
+
+> ⚠️ **Important for LLM Inference**  
+> Sparse TFLOPS are only achievable when the model weights have been pruned to a 2:4 structured sparsity pattern. Most pre-trained LLMs have **dense** (unpruned) weights, meaning the Dense TFLOPS figure is the relevant one for typical inference workloads. The Sparse column is included for completeness and for users who deploy pruned models.
+
+For LLM decode, which is bandwidth-bound rather than compute-bound, neither Dense nor Sparse TFLOPS directly determines token generation speed — that is governed by HBM bandwidth. However, for the compute-bound prefill phase, Dense TFLOPS is the appropriate metric for unpruned models.
+
 ### Supported GPU Hardware
 
-| GPU | VRAM (GB) | HBM BW (GB/s) | TFLOPS FP16 (Dense) | TFLOPS FP16 (Sparse) | PCIe Gen | NVLink (GB/s) | NVS |
-|-----|-----------|---------------|---------------------|----------------------|----------|---------------|-----|
-| H200 SXM | 141 | 4800 | 989 | 1979 | 5 | 900 | Yes |
-| H100 SXM | 80 | 3350 | 989 | 1979 | 5 | 900 | Yes |
-| H100 PCIe | 80 | 2000 | 756 | 1513 | 5 | 0 | No |
-| A100 80GB | 80 | 2000 | 312 | 624 | 4 | 600 | Yes |
-| A100 40GB | 40 | 1555 | 312 | 624 | 4 | 600 | Yes |
-| A6000 Ada | 48 | 960 | 182 | 364 | 4 | 0 | No |
-| RTX 4090 | 24 | 1008 | 165 | 330 | 4 | 0 | No |
-| RTX 3090 | 24 | 936 | 71 | 142 | 4 | 0 | No |
-| L40S | 48 | 864 | 366 | 733 | 4 | 0 | No |
-| MI300X | 192 | 5300 | 1307 | 2614 | 5 | 400 | No |
-| MI250X | 128 | 3276 | 383 | 383 | 4 | 400 | No |
+| GPU       | VRAM (GB) | HBM BW (GB/s) | TFLOPS FP16 (Dense) | TFLOPS FP16 (Sparse) | PCIe Gen | NVLink (GB/s) | NVS |
+| --------- | --------- | ------------- | ------------------- | -------------------- | -------- | ------------- | --- |
+| H200 SXM  | 141       | 4800          | 989                 | 1979                 | 5        | 900           | Yes |
+| H100 SXM  | 80        | 3350          | 989                 | 1979                 | 5        | 900           | Yes |
+| H100 PCIe | 80        | 2000          | 756                 | 1513                 | 5        | 0             | No  |
+| A100 80GB | 80        | 2000          | 312                 | 624                  | 4        | 600           | Yes |
+| A100 40GB | 40        | 1555          | 312                 | 624                  | 4        | 600           | Yes |
+| A6000 Ada | 48        | 960           | 182                 | 364                  | 4        | 0             | No  |
+| RTX 4090  | 24        | 1008          | 165                 | 330                  | 4        | 0             | No  |
+| RTX 3090  | 24        | 936           | 71                  | 142                  | 4        | 0             | No  |
+| L40S      | 48        | 864           | 366                 | 733                  | 4        | 0             | No  |
+| MI300X    | 192       | 5300          | 1307                | 2614                 | 5        | 400           | No  |
+| MI250X    | 128       | 3276          | 383                 | 383                  | 4        | 400           | No  |
 
-*Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubling throughput for supported operations compared to Dense matrices. Older architectures like MI250X (CDNA2) do not feature structured sparsity hardware acceleration.*
+_Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubling throughput for supported operations compared to Dense matrices. Older architectures like MI250X (CDNA2) do not feature structured sparsity hardware acceleration, hence Dense = Sparse for that GPU._
 
 ### PCIe Bandwidth Reference
 
-| Config | Theoretical | Effective (η=0.90) | Bus Wall (H200) | Bus Wall (4090) |
-|--------|------------|-------------------|-----------------|----------------|
-| Gen3 x16 | 15.75 GB/s | 14.2 GB/s | 338× | 71× |
-| Gen3 x8 | 7.88 GB/s | 7.1 GB/s | 676× | 142× |
-| Gen4 x16 | 31.5 GB/s | 28.4 GB/s | 169× | 36× |
-| Gen4 x8 | 15.75 GB/s | 14.2 GB/s | 338× | 71× |
-| Gen5 x16 | 63.0 GB/s | 56.7 GB/s | 85× | 18× |
-| Gen5 x8 | 31.5 GB/s | 28.4 GB/s | 169× | 36× |
+| Config   | Theoretical | Effective (η=0.90) | Bus Wall (H200) | Bus Wall (4090) |
+| -------- | ----------- | ------------------ | --------------- | --------------- |
+| Gen3 x16 | 15.75 GB/s  | 14.2 GB/s          | 338×            | 71×             |
+| Gen3 x8  | 7.88 GB/s   | 7.1 GB/s           | 676×            | 142×            |
+| Gen4 x16 | 31.5 GB/s   | 28.4 GB/s          | 169×            | 36×             |
+| Gen4 x8  | 15.75 GB/s  | 14.2 GB/s          | 338×            | 71×             |
+| Gen5 x16 | 63.0 GB/s   | 56.7 GB/s          | 85×             | 18×             |
+| Gen5 x8  | 31.5 GB/s   | 28.4 GB/s          | 169×            | 36×             |
 
 ### Interconnect Latency Reference
 
-| Interconnect | Latency | Topology | Notes |
-|-------------|---------|----------|-------|
-| NVSwitch | ~5 μs | All-to-all | Best for 4+ GPUs |
-| NVLink P2P | ~10 μs | Ring/mesh | Direct GPU-GPU link |
-| PCIe P2P | ~40 μs | Ring | Through root complex |
-| Through CPU | ~100 μs | Multi-hop | GPU → CPU → GPU |
+| Interconnect | Latency | Topology   | Notes                |
+| ------------ | ------- | ---------- | -------------------- |
+| NVSwitch     | ~5 μs   | All-to-all | Best for 4+ GPUs     |
+| NVLink P2P   | ~10 μs  | Ring/mesh  | Direct GPU-GPU link  |
+| PCIe P2P     | ~40 μs  | Ring       | Through root complex |
+| Through CPU  | ~100 μs | Multi-hop  | GPU → CPU → GPU      |
 
 ---
 
@@ -734,7 +747,7 @@ The calculator automatically discovers quantized variants by:
 - **TTFT** — Time to First Token: the latency from receiving a prompt to generating the first output token, dominated by the prefill (prompt processing) phase.
 - **TDP** — Thermal Design Power: the maximum sustained power dissipation a cooling system must handle, used as a proxy for peak GPU power consumption.
 - **QLoRA** — Quantized Low-Rank Adaptation: a parameter-efficient fine-tuning method that quantizes the base model to 4-bit (NF4) and trains small low-rank adapter matrices.
-- **GGUF** — GGML GPT-Generated Unified Format: a file format for storing quantized LLM weights, designed for efficient loading and inference with llama.cpp and compatible engines.
+- **GGUF** — GPT-Generated Unified Format: a file format for storing quantized LLM weights, designed for efficient loading and inference with llama.cpp and compatible engines.
 - **Bus Wall** — Le Mur du Bus: the ratio of GPU HBM bandwidth to the effective transfer bandwidth (PCIe + RAM) for RAM-offloaded layers. Quantifies how many times slower offloaded layers are compared to VRAM-resident layers.
 - **PCIe** — Peripheral Component Interconnect Express: the primary data bus between CPU and GPU, providing 7–57 GB/s effective bandwidth depending on generation and lane count.
 - **NVLink** — NVIDIA's proprietary high-speed GPU-to-GPU interconnect, providing 300–900 GB/s bandwidth for Tensor Parallelism communication.
@@ -744,6 +757,6 @@ The calculator automatically discovers quantized variants by:
 - **Ridge Point** — The arithmetic intensity at which a GPU transitions from bandwidth-bound to compute-bound execution, equal to `TFLOPS / BW_HBM`.
 - **TP** — Tensor Parallelism: a multi-GPU strategy that splits model weights across GPUs, requiring all-reduce communication after each layer.
 - **PP** — Pipeline Parallelism: a multi-GPU strategy that splits model layers across GPUs sequentially, requiring only activation tensor communication between stages.
-- **Dense TFLOPS** — Compute throughput calculated without assuming structural sparsity. Every operation in the matrix multiply is explicitly computed.
-- **Sparse TFLOPS** — Compute throughput assuming structured sparsity (e.g., 2:4 sparsity where 2 out of every 4 elements are zero). This allows specialized hardware (like Tensor Cores) to skip zero-multiplies, effectively doubling the theoretical throughput for supported operations.
-
+- **Dense TFLOPS** — Compute throughput calculated without assuming structural sparsity. Every multiply-accumulate in the matrix operation is explicitly computed. This is the baseline performance metric for unpruned LLM inference.
+- **Sparse TFLOPS** — Compute throughput assuming a 2:4 structured sparsity pattern (2 out of every 4 elements are zero). Specialized hardware (NVIDIA Tensor Cores from Ampere onward) can skip zero-multiplies, effectively doubling throughput. Sparse TFLOPS = 2 × Dense TFLOPS on supported hardware. Only achievable with pruned models; irrelevant for standard dense LLM weights.
+- **2:4 Structured Sparsity** — A sparsity pattern where exactly 2 out of every 4 consecutive weight elements are zero, in a fixed pattern. This is the only sparsity format natively accelerated by NVIDIA Tensor Cores (Ampere and later). Pruning a model to 2:4 sparsity typically preserves most of the model's accuracy while halving the compute required for matrix multiplications.

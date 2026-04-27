@@ -40,12 +40,18 @@
           <h2 style="margin: 0">Memory use</h2>
           <span id="bdg" class="bdg">&mdash;</span>
         </div>
-        <div class="bar-w" id="barWrap">
-          <div class="bar-inner" id="barInner" style="width: 0">
-            <div class="bar-seg bar-wts" id="segWts" style="width: 0"></div>
-            <div class="bar-seg bar-kv" id="segKv" style="width: 0"></div>
-            <div class="bar-seg bar-ov" id="segOv" style="width: 0"></div>
-            <div class="bar-seg bar-ram" id="segRam" style="width: 0"></div>
+        <div style="display: flex; gap: 8px;">
+          <div class="bar-w" id="barWrap" style="flex: 1;">
+            <div class="bar-inner" id="barInner" style="width: 0">
+              <div class="bar-seg bar-wts" id="segWts" style="width: 0"></div>
+              <div class="bar-seg bar-kv" id="segKv" style="width: 0"></div>
+              <div class="bar-seg bar-ov" id="segOv" style="width: 0"></div>
+            </div>
+          </div>
+          <div class="bar-w" id="barWrapRam" style="display: none; flex: 1;">
+            <div class="bar-inner" id="barInnerRam" style="width: 0">
+              <div class="bar-seg bar-ram" id="segRam" style="width: 0"></div>
+            </div>
           </div>
         </div>
         <div class="bar-w-legend">

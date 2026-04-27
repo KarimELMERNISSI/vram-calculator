@@ -198,16 +198,30 @@ function calc() {
   var pctW = Math.min(100, (wGB / totV) * 100);
   var pctKV = Math.min(100, (kvGB / totV) * 100);
   var pctOv = Math.min(100, (ovGB / totV) * 100);
-  var pctRam =
-    ramUsable > 0 ? Math.min(100, (ramUsable / totV) * 100) : 0;
-  var totalPct = pctW + pctKV + pctOv + pctRam;
+  var totalPct = pctW + pctKV + pctOv;
 
   document.getElementById("segWts").style.width = pctW + "%";
   document.getElementById("segKv").style.width = pctKV + "%";
   document.getElementById("segOv").style.width = pctOv + "%";
-  document.getElementById("segRam").style.width = pctRam + "%";
   document.getElementById("barInner").style.width =
     Math.min(100, totalPct) + "%";
+
+  var barWrap = document.getElementById("barWrap");
+  var barWrapRam = document.getElementById("barWrapRam");
+  if (ramUsable > 0 && sysRam > 0) {
+    if (barWrapRam) barWrapRam.style.display = "block";
+    if (barWrap) barWrap.style.flex = totV;
+    if (barWrapRam) barWrapRam.style.flex = sysRam;
+    
+    var pctRam = Math.min(100, (ramUsable / sysRam) * 100);
+    var segRam = document.getElementById("segRam");
+    if (segRam) segRam.style.width = "100%";
+    var barInnerRam = document.getElementById("barInnerRam");
+    if (barInnerRam) barInnerRam.style.width = pctRam + "%";
+  } else {
+    if (barWrapRam) barWrapRam.style.display = "none";
+    if (barWrap) barWrap.style.flex = "1";
+  }
 
   // Labels
   if (ramUsable > 0) {
