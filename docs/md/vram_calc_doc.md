@@ -411,7 +411,7 @@ where `h` is the hidden size and `N` is the number of GPUs. NVSwitch eliminates 
 
 #### AMD Infinity Fabric
 
-AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X uses Infinity Fabric to connect its 12 chiplets (8 XCDs + 4 I/O dies) within a single package, providing up to 400 GB/s of inter-chiplet bandwidth.
+AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X is a multi-chiplet accelerator integrating 8 compute dies (XCDs) and 4 I/O dies — 12 chiplets in total — connected via AMD Infinity Fabric within the package. It provides 192 GB of HBM3 memory at 5,300 GB/s aggregate bandwidth. For multi-GPU scaling, each discrete MI300X offers a 16-lane PCIe® Gen 5 host interface and seven external AMD Infinity Fabric links (each at 128 GB/s bidirectional), allowing full all-to-all connectivity between eight GPUs in a ring topology.
 
 #### PCIe Peer-to-Peer (P2P)
 
@@ -656,19 +656,21 @@ The calculator automatically discovers quantized variants by:
 
 ### Supported GPU Hardware
 
-| GPU | VRAM (GB) | HBM BW (GB/s) | TFLOPS (FP16) | PCIe Gen | NVLink (GB/s) | NVS |
-|-----|-----------|---------------|---------------|----------|---------------|-----|
-| H200 SXM | 141 | 4800 | 1979 | 5 | 900 | Yes |
-| H100 SXM | 80 | 3350 | 1979 | 5 | 900 | Yes |
-| H100 PCIe | 80 | 2000 | 756 | 5 | 0 | No |
-| A100 80GB | 80 | 2000 | 312 | 4 | 600 | Yes |
-| A100 40GB | 40 | 1555 | 312 | 4 | 600 | Yes |
-| A6000 Ada | 48 | 960 | 182 | 4 | 0 | No |
-| RTX 4090 | 24 | 1008 | 165 | 4 | 0 | No |
-| RTX 3090 | 24 | 936 | 71 | 4 | 0 | No |
-| L40S | 48 | 864 | 366 | 4 | 0 | No |
-| MI300X | 192 | 5300 | 1307 | 5 | 400 | No |
-| MI250X | 128 | 3276 | 383 | 4 | 400 | No |
+| GPU | VRAM (GB) | HBM BW (GB/s) | TFLOPS FP16 (Dense) | TFLOPS FP16 (Sparse) | PCIe Gen | NVLink (GB/s) | NVS |
+|-----|-----------|---------------|---------------------|----------------------|----------|---------------|-----|
+| H200 SXM | 141 | 4800 | 989 | 1979 | 5 | 900 | Yes |
+| H100 SXM | 80 | 3350 | 989 | 1979 | 5 | 900 | Yes |
+| H100 PCIe | 80 | 2000 | 756 | 1513 | 5 | 0 | No |
+| A100 80GB | 80 | 2000 | 312 | 624 | 4 | 600 | Yes |
+| A100 40GB | 40 | 1555 | 312 | 624 | 4 | 600 | Yes |
+| A6000 Ada | 48 | 960 | 182 | 364 | 4 | 0 | No |
+| RTX 4090 | 24 | 1008 | 165 | 330 | 4 | 0 | No |
+| RTX 3090 | 24 | 936 | 71 | 142 | 4 | 0 | No |
+| L40S | 48 | 864 | 366 | 733 | 4 | 0 | No |
+| MI300X | 192 | 5300 | 1307 | 2614 | 5 | 400 | No |
+| MI250X | 128 | 3276 | 383 | 383 | 4 | 400 | No |
+
+*Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubling throughput for supported operations compared to Dense matrices. Older architectures like MI250X (CDNA2) do not feature structured sparsity hardware acceleration.*
 
 ### PCIe Bandwidth Reference
 

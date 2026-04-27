@@ -19,4 +19,5 @@ var MODELS = [
 // ═══════════════════════════════════════════════════════════
 // GPU PRESETS
 // ═══════════════════════════════════════════════════════════
-var GPUS = {{ site.Data.gpus | jsonify | safeJS }};
+var GPUS = JSON.parse(atob("{{ site.Data.gpus | jsonify | base64Encode }}")); // encapsulated in atob() to avoid JS misinterpretation on hugo syntax
+// old v : var GPUS = {{ site.Data.gpus | jsonify | safeJS }};

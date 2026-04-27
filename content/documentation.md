@@ -9,8 +9,6 @@ title: "Technical Documentation"
 
 ---
 
-
-
 ## 1. Introduction
 
 The Local LLM Resource Estimator is a self-contained, browser-based tool designed to estimate the memory requirements, inference performance, and operational costs of deploying Large Language Models (LLMs) on GPU hardware. It integrates directly with the HuggingFace model hub to retrieve real model metadata, including parameter counts, tensor types, quantization configurations, and available quantized variants.
@@ -34,7 +32,7 @@ The calculator addresses two primary deployment scenarios:
 
 Total GPU memory consumption is modeled as the sum of three primary components:
 
-$$  V_{total} = V_{weights} + V_{kv} + V_{overhead} \quad \text{(Equation 1)}  $$
+$$ V*{total} = V*{weights} + V*{kv} + V*{overhead} \quad \text{(Equation 1)} $$
 
 where `V_weights` is the memory for model parameters, `V_kv` is the KV cache memory, and `V_overhead` accounts for framework and runtime overhead.
 
@@ -42,7 +40,7 @@ where `V_weights` is the memory for model parameters, `V_kv` is the KV cache mem
 
 The dominant memory component is the storage of model weights. Its size is determined by the total parameter count and the precision (bytes per parameter):
 
-$$  V_{weights} = P_{total} \times  b_{param} \quad \text{(Equation 2)}  $$
+$$ V*{weights} = P*{total} \times b\_{param} \quad \text{(Equation 2)} $$
 
 **Definition — Total Parameters:**  
 `P_total` is the total number of learnable parameters in the model, including _all_ experts for Mixture-of-Experts (MoE) architectures. For dense models, `P_total = P_active`. For MoE models, `P_total ≫ P_active` since only a subset of experts is activated per token.
@@ -67,7 +65,7 @@ $$  V_{weights} = P_{total} \times  b_{param} \quad \text{(Equation 2)}  $$
 
 During autoregressive generation, the model caches past Key and Value states from attention layers to avoid recomputation. The KV cache size is:
 
-$$  V_{kv} = 2 \times  L \times  n_{kv} \times  d_{h} \times  C \times  B \times  U \times  b_{kv} \quad \text{(Equation 3)}  $$
+$$ V*{kv} = 2 \times L \times n*{kv} \times d*{h} \times C \times B \times U \times b*{kv} \quad \text{(Equation 3)} $$
 
 where the factor of 2 accounts for separate Key and Value tensors.
 
@@ -97,7 +95,7 @@ For example, Llama 3.1 70B uses GQA with `n_q = 64` query heads but only `n_kv =
 
 When architecture details (`L`, `n_kv`, `d_h`) are unavailable, the calculator falls back to a rule-of-thumb estimate:
 
-$$  V_{kv} \approx  P_{total} \times  0.12 \times  (C / 4096) \times  B \times  U \quad \text{(Equation 4)}  $$
+$$ V*{kv} \approx P*{total} \times 0.12 \times (C / 4096) \times B \times U \quad \text{(Equation 4)} $$
 
 This assumes KV cache is approximately 12% of weight memory at 4096-token context for a typical GQA model.
 
@@ -105,7 +103,7 @@ This assumes KV cache is approximately 12% of weight memory at 4096-token contex
 
 Framework overhead includes CUDA kernels, temporary buffers, activation memory, and communication buffers. It is estimated as a fraction of weight memory:
 
-$$  V_{overhead} = V_{weights} \times  f_{overhead} \quad \text{(Equation 5)}  $$
+$$ V*{overhead} = V*{weights} \times f\_{overhead} \quad \text{(Equation 5)} $$
 
 where `f_overhead` varies by operation mode:
 
@@ -126,23 +124,23 @@ For full fine-tuning, the overhead factor of 2.0 accounts for gradients (1× wei
 
 When the total required memory exceeds available VRAM, the calculator supports an optional RAM offloading mode:
 
-$$  V_{overflow} = \max(0, V_{total} - V_{VRAM}) \quad \text{(Equation 6)}  $$
+$$ V*{overflow} = \max(0, V*{total} - V\_{VRAM}) \quad \text{(Equation 6)} $$
 
-$$  V_{RAM,usable} = \min(V_{overflow,} V_{RAM,available}) \quad \text{(Equation 7)}  $$
+$$ V*{RAM,usable} = \min(V*{overflow,} V\_{RAM,available}) \quad \text{(Equation 7)} $$
 
 The effective available memory becomes:
 
-$$  V_{effective} = V_{VRAM} + V_{RAM,usable} \quad \text{(Equation 8)}  $$
+$$ V*{effective} = V*{VRAM} + V\_{RAM,usable} \quad \text{(Equation 8)} $$
 
 ### 3.1 The Bus Wall ("Le Mur du Bus")
 
 The fundamental performance limitation of RAM offloading is captured by the **Bus Wall** concept — the ratio of GPU HBM bandwidth to the effective transfer bandwidth between CPU and GPU:
 
-$$  Bus Wall Ratio = BW_{HBM} / BW_{transfer} \quad \text{(Equation 9)}  $$
+$$ Bus Wall Ratio = BW*{HBM} / BW*{transfer} \quad \text{(Equation 9)} $$
 
 where `BW_transfer` is the effective bandwidth of the data path from system RAM to GPU, determined by the bottleneck in the transfer chain:
 
-$$  BW_{transfer} = \min(BW_{PCIe,effective,} BW_{RAM,effective}) \quad \text{(Equation 10)}  $$
+$$ BW*{transfer} = \min(BW*{PCIe,effective,} BW\_{RAM,effective}) \quad \text{(Equation 10)} $$
 
 The Bus Wall ratio tells you how many times slower RAM-offloaded layers are compared to VRAM-resident layers. Typical values range from 30× (RTX 4090 with Gen4 x16) to over 100× (H100 SXM with Gen5 x16).
 
@@ -150,17 +148,17 @@ The Bus Wall ratio tells you how many times slower RAM-offloaded layers are comp
 
 The performance degradation from RAM offloading is modeled by decomposing the decode time into two independent data paths:
 
-$$  T_{decode} = W_{VRAM} / BW_{HBM} + W_{RAM} / BW_{transfer} \quad \text{(Equation 11)}  $$
+$$ T*{decode} = W*{VRAM} / BW*{HBM} + W*{RAM} / BW\_{transfer} \quad \text{(Equation 11)} $$
 
 where `W_VRAM` is the fraction of weights in VRAM and `W_RAM` is the fraction offloaded to RAM. This two-path model is more accurate than a simple degradation factor because it correctly accounts for the fact that VRAM-resident layers still run at full HBM speed, while only the offloaded portion is slowed by the Bus Wall.
 
 The fraction of weights in RAM is:
 
-$$  f_{RAM} = V_{RAM,usable} / V_{total} \quad \text{(Equation 12)}  $$
+$$ f*{RAM} = V*{RAM,usable} / V\_{total} \quad \text{(Equation 12)} $$
 
 Substituting, the effective decode speed becomes:
 
-$$  TPS_{offload} = 1 / ((1-f_{RAM}) \times  W / BW_{HBM} + f_{RAM} \times  W / BW_{transfer}) \quad \text{(Equation 13)}  $$
+$$ TPS*{offload} = 1 / ((1-f*{RAM}) \times W / BW*{HBM} + f*{RAM} \times W / BW\_{transfer}) \quad \text{(Equation 13)} $$
 
 where `W = P_active × b_param` is the total weight memory in GB.
 
@@ -191,7 +189,7 @@ PCI Express (PCIe) is the primary data highway between the CPU and GPU. Its band
 
 Theoretical PCIe bandwidth is calculated as:
 
-$$  BW_{PCIe,theoretical} = R_{GT}/s \times  N_{lanes} \times  (128/130 (for PCIe Gen 3.0+)) \div  8 \quad \text{(Equation 14)}  $$
+$$ BW*{PCIe,theoretical} = R*{GT}/s \times N\_{lanes} \times (128/130 (for PCIe Gen 3.0+)) \div 8 \quad \text{(Equation 14)} $$
 
 where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (typically 16, 8, or 4), and the 128/130 (for PCIe Gen 3.0+) factor accounts for the encoding overhead introduced in PCIe 3.0+.
 
@@ -205,7 +203,7 @@ where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (
 
 Theoretical bandwidth is never fully achieved. Protocol overhead reduces practical throughput:
 
-$$  BW_{PCIe,effective} = BW_{PCIe,theoretical} \times  η_{PCIe} \quad \text{(Equation 15)}  $$
+$$ BW*{PCIe,effective} = BW*{PCIe,theoretical} \times η\_{PCIe} \quad \text{(Equation 15)} $$
 
 where `η_PCIe ≈ 0.90` for large sequential DMA transfers. The overhead comes from:
 
@@ -232,7 +230,7 @@ Reducing from x16 to x8 exactly halves the available bandwidth, which significan
 
 System RAM bandwidth is determined by the memory type, transfer rate, and number of channels:
 
-$$  BW_{RAM,theoretical} = MT/s \times  N_{channels} \times  8 bytes/transfer \quad \text{(Equation 16)}  $$
+$$ BW*{RAM,theoretical} = MT/s \times N*{channels} \times 8 bytes/transfer \quad \text{(Equation 16)} $$
 
 | Configuration  | MT/s | Channels | BW (GB/s) |
 | -------------- | ---- | -------- | --------- |
@@ -247,7 +245,7 @@ $$  BW_{RAM,theoretical} = MT/s \times  N_{channels} \times  8 bytes/transfer \q
 
 As with PCIe, theoretical RAM bandwidth is not fully achievable:
 
-$$  BW_{RAM,effective} = BW_{RAM,theoretical} \times  η_{RAM} \times  f_{NUMA} \quad \text{(Equation 17)}  $$
+$$ BW*{RAM,effective} = BW*{RAM,theoretical} \times η*{RAM} \times f*{NUMA} \quad \text{(Equation 17)} $$
 
 where `η_RAM ≈ 0.85` accounts for DRAM refresh cycles, row misses, and memory controller scheduling, and `f_NUMA` is the NUMA efficiency factor.
 
@@ -255,7 +253,8 @@ where `η_RAM ≈ 0.85` accounts for DRAM refresh cycles, row misses, and memory
 
 On multi-socket servers (AMD EPYC, Intel Xeon), each CPU socket has its own memory controller and attached RAM. Accessing RAM on the local socket is fast, but accessing RAM attached to a remote socket traverses an inter-socket link (AMD Infinity Fabric or Intel UPI) that adds latency and reduces bandwidth by 30–50%:
 
-$$  f_{NUMA} = 1.0 \quad \text{(Equation 18)}  $$ if NUMA-aware (weights on local socket)  
+$$ f\_{NUMA} = 1.0 \quad \text{(Equation 18)} $$ if NUMA-aware (weights on local socket)
+
 > `f_NUMA = 0.65` if no NUMA awareness (potential cross-socket access)
 
 The calculator uses `f_NUMA = 0.65` when NUMA awareness is disabled, reflecting the worst case where weight data may be allocated on a remote socket. For production deployments, always enable NUMA-aware allocation and pin the GPU to the same NUMA node as the RAM holding the offloaded weights.
@@ -271,7 +270,7 @@ When RAM-offloaded layers are accessed during inference, data must traverse the 
 
 The bottleneck in this chain is the slower of PCIe effective bandwidth and RAM effective bandwidth:
 
-$$  BW_{transfer} = \min(BW_{PCIe,effective,} BW_{RAM,effective}) \quad \text{(Equation 19)}  $$
+$$ BW*{transfer} = \min(BW*{PCIe,effective,} BW\_{RAM,effective}) \quad \text{(Equation 19)} $$
 
 In most configurations, PCIe is the bottleneck. Even DDR4 2-channel at 51.2 GB/s theoretical (≈43 GB/s effective) exceeds PCIe Gen4 x8 at ≈14 GB/s effective. However, with fast PCIe Gen5 x16 (≈57 GB/s effective), slower RAM configurations (DDR4 2-channel) can become the bottleneck instead.
 
@@ -294,7 +293,12 @@ LLM decode is almost always HBM-bandwidth-bound: each token generation requires 
 
 GPU clock speed (typically 1.5–2.5 GHz) affects compute throughput (TFLOPS) but has limited impact on bandwidth-bound inference. The relationship between clock speed and compute throughput is:
 
-$$  TFLOPS = N_{cores} \times  f_{clock} \times  2 FLOP/clock/core (CUDA cores, FMA operation) \quad \text{(Equation 20)}  $$
+$$ TFLOPS = N*{cores} \times f*{clock} \times 2 FLOP/clock/core (CUDA cores, FMA operation) \quad \text{(Equation 20)} $$
+
+Note: This formula applies to standard CUDA scalar cores only.
+Tensor Core throughput is architecture- and precision-specific (e.g., H100 FP16
+dense ≈ 989 TFLOPS) and must be taken from vendor specification tables —
+it cannot be derived from this formula.
 
 For bandwidth-bound decode, increasing clock speed provides no benefit — the bottleneck is HBM read speed, not compute. Clock speed only matters for compute-bound prefill, where higher TFLOPS directly translates to faster prompt processing.
 
@@ -305,17 +309,24 @@ The roofline model provides a unified framework for understanding whether a work
 **Definition — Arithmetic Intensity:**  
 Arithmetic intensity is the ratio of FLOPs performed to bytes of data accessed:
 
-$$  AI = FLOPs / Bytes accessed \quad \text{(Equation 21)}  $$
+$$ AI = FLOPs / Bytes accessed \quad \text{(Equation 21)} $$
 
 For LLM decode with active parameters `P_active` stored at `b` bytes per parameter:
 
-$$  AI_{decode} = (2 \times  P_{active}) / (P_{active} \times  b) = 2/b \quad \text{(Equation 22)}  $$
+$$ AI*{decode} = (2 \times P*{active}) / (P\_{active} \times b) = 2/b \quad \text{(Equation 22)} $$
 
 At Q4 (`b = 0.5`), the arithmetic intensity is only 4 FLOP/byte. At FP16 (`b = 2`), it drops to 1 FLOP/byte. These values are far below the GPU's ridge point (the arithmetic intensity at which compute and bandwidth are equally limiting):
 
-$$  AI_{ridge} = TFLOPS / BW_{HBM} \quad \text{(Equation 23)}  $$
+$$ AI*{ridge} = TFLOPS / BW*{HBM} \quad \text{(Equation 23)} $$
 
-For H100: `AI_ridge = 1979/3350 ≈ 0.30 TFLOPS/(GB/s) = 591 FLOP/byte`. This confirms that decode is deeply bandwidth-bound regardless of quantization level.
+For H100, using the dense FP16 figure as a conservative ceiling:
+`AI_ridge = 989 / 3,350 ≈ 295 FLOP/byte` (dense, non-sparse)
+
+Using the sparse figure from NVIDIA's spec sheet:
+`AI_ridge = 1,979 / 3,350 ≈ 591 FLOP/byte` (sparse, 2:4 structured)
+
+Either way, LLM decode arithmetic intensity (1–4 FLOP/byte) is far below both
+ridge points, confirming bandwidth-bound execution regardless of convention used.
 
 For prefill, the arithmetic intensity is much higher because the same weights are reused across all prompt tokens in a single batched matrix multiplication. Prefill is typically compute-bound.
 
@@ -342,13 +353,13 @@ NVSwitch is NVIDIA's switching fabric that provides full all-to-all connectivity
 
 vs. ring all-reduce on point-to-point NVLink:
 
-$$  All-reduce_{ring} = 2 \times  ((N-1)/N) \times  (h \times  2) / BW_{NVLink} \quad \text{(Equation 25)}  $$
+$$ All-reduce*{ring} = 2 \times ((N-1)/N) \times (h \times 2) / BW*{NVLink} \quad \text{(Equation 25)} $$
 
 where `h` is the hidden size and `N` is the number of GPUs. NVSwitch eliminates the `(N−1)/N` penalty and reduces the number of hops, providing significantly better TP efficiency for 4+ GPUs.
 
 #### AMD Infinity Fabric
 
-AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X uses Infinity Fabric to connect its 12 chiplets (8 XCDs + 4 I/O dies) within a single package, providing up to 400 GB/s of inter-chiplet bandwidth.
+AMD's Infinity Fabric serves a similar role to NVLink on MI-series GPUs. The MI300X is a multi-chiplet accelerator integrating 8 compute dies (XCDs) and 4 I/O dies — 12 chiplets in total — connected via AMD Infinity Fabric within the package. It provides 192 GB of HBM3 memory at 5,300 GB/s aggregate bandwidth. For multi-GPU scaling, each discrete MI300X offers a 16-lane PCIe® Gen 5 host interface and seven external AMD Infinity Fabric links (each at 128 GB/s bidirectional), allowing full all-to-all connectivity between eight GPUs in a ring topology.
 
 #### PCIe Peer-to-Peer (P2P)
 
@@ -362,13 +373,13 @@ TP splits model weights across `N` GPUs. Each GPU holds `1/N` of the weights and
 
 The decode time per token with TP is:
 
-$$  T_{TP} = (P_{active} \times  b) / (N \times  BW_{HBM}) + L \times  ((2 \times  (N-1)/N \times  h \times  2) / BW_{interconnect} + λ_{AR}) \quad \text{(Equation 26)}  $$
+$$ T*{TP} = (P*{active} \times b) / (N \times BW*{HBM}) + L \times ((2 \times (N-1)/N \times h \times 2) / BW*{interconnect} + λ\_{AR}) \quad \text{(Equation 26)} $$
 
 where `λ_AR` is the all-reduce latency per layer (5–100 μs depending on interconnect).
 
 TP efficiency is:
 
-$$  η_{TP} = T_{compute} / (T_{compute} + T_{communication}) \quad \text{(Equation 27)}  $$
+$$ η*{TP} = T*{compute} / (T*{compute} + T*{communication}) \quad \text{(Equation 27)} $$
 
 | Interconnect      | 2-GPU | 4-GPU | 8-GPU |
 | ----------------- | ----- | ----- | ----- |
@@ -384,7 +395,7 @@ PP splits model layers across GPUs sequentially. Each GPU processes a contiguous
 
 However, PP introduces pipeline bubbles — idle time where GPUs wait for preceding stages to complete:
 
-$$  Bubble fraction = (N-1) / (N + M - 1) \quad \text{(Equation 28)}  $$
+$$ Bubble fraction = (N-1) / (N + M - 1) \quad \text{(Equation 28)} $$
 
 where `M` is the number of micro-batches. For single-user inference with batch size 1, only 1 micro-batch is possible, giving bubble fraction `(N−1)/N`.
 
@@ -398,7 +409,7 @@ For very large models on many GPUs, both strategies can be combined: TP within a
 
 The complete decode time model accounts for all connectivity factors:
 
-$$  T_{decode} = (1-f_{RAM}) \times  W / (η_{TP} \times  N \times  BW_{HBM})  +  f_{RAM} \times  W / \min(η_{PCIe} \times  BW_{PCIe,} η_{RAM} \times  f_{NUMA} \times  BW_{RAM}) \quad \text{(Equation 29)}  $$
+$$ T*{decode} = (1-f*{RAM}) \times W / (η*{TP} \times N \times BW*{HBM}) + f*{RAM} \times W / \min(η*{PCIe} \times BW*{PCIe,} η*{RAM} \times f*{NUMA} \times BW*{RAM}) \quad \text{(Equation 29)} $$
 
 This formula captures the essential physics of LLM inference:
 
@@ -416,7 +427,7 @@ This formula captures the essential physics of LLM inference:
 
 During autoregressive decoding, each token generation requires loading all model weights from GPU memory. This makes inference **bandwidth-bound**:
 
-$$  TPS = BW / (P_{active} \times  b_{param} \times  1000) \quad \text{(Equation 30)}  $$
+$$ TPS = BW / (P*{active} \times b*{param} \times 1000) \quad \text{(Equation 30)} $$
 
 where `BW` is the GPU memory bandwidth in GB/s. For MoE models, `P_active` (the number of parameters active per forward pass) is used instead of `P_total`, since only the routed experts are loaded during decode.
 
@@ -427,7 +438,7 @@ For dense models, `P_active = P_total`. For MoE models, `P_active` represents on
 
 The prefill phase processes the entire prompt in parallel. The time to first token is estimated as:
 
-$$  TTFT = (P_{active} \times  C \times  2 \times  b_{param}) / BW \times  1000 ms \quad \text{(Equation 31)}  $$
+$$ TTFT = (P*{active} \times C \times 2 \times b*{param}) / BW \times 1000 ms \quad \text{(Equation 31)} $$
 
 where `C` is the prompt length in tokens. The factor of 2 accounts for the read and write of activations during the forward pass.
 
@@ -435,13 +446,13 @@ where `C` is the prompt length in tokens. The factor of 2 accounts for the read 
 
 The calculator provides additional derived metrics for practical deployment planning:
 
-$$  Latency per token = 1000 / TPS \quad \text{ms (Equation 32)}  $$
+$$ Latency per token = 1000 / TPS \quad \text{ms (Equation 32)} $$
 
-$$  Time_{100} = TTFT/1000 + 100/TPS \quad \text{seconds (Equation 33)}  $$
+$$ Time\_{100} = TTFT/1000 + 100/TPS \quad \text{seconds (Equation 33)} $$
 
-$$  Time_{1000} = TTFT/1000 + 1000/TPS \quad \text{seconds (Equation 34)}  $$
+$$ Time\_{1000} = TTFT/1000 + 1000/TPS \quad \text{seconds (Equation 34)} $$
 
-$$  Throughput = TPS \times  U \quad \text{tok/s total (Equation 35)}  $$
+$$ Throughput = TPS \times U \quad \text{tok/s total (Equation 35)} $$
 
 ---
 
@@ -451,29 +462,29 @@ $$  Throughput = TPS \times  U \quad \text{tok/s total (Equation 35)}  $$
 
 GPU power consumption is estimated from the Thermal Design Power (TDP) and utilization:
 
-$$  P_{draw} = TDP \times  (U_{GPU} / 100) \quad \text{(Equation 36)}  $$
+$$ P*{draw} = TDP \times (U*{GPU} / 100) \quad \text{(Equation 36)} $$
 
 where `U_GPU` is the GPU utilization percentage. LLM inference is typically memory-bandwidth-bound rather than compute-bound, resulting in 60–90% utilization during decode.
 
 ### 6.2 Energy and Cost Calculations
 
-$$  E_{hour} = P_{draw} / 1000 \quad \text{kWh (Equation 37)}  $$
+$$ E*{hour} = P*{draw} / 1000 \quad \text{kWh (Equation 37)} $$
 
-$$  C_{hour} = E_{hour} \times  R_{elec} \quad \text{(Equation 38)}  $$
+$$ C*{hour} = E*{hour} \times R\_{elec} \quad \text{(Equation 38)} $$
 
-$$  C_{day} = C_{hour} \times  H_{day} \quad \text{(Equation 39)}  $$
+$$ C*{day} = C*{hour} \times H\_{day} \quad \text{(Equation 39)} $$
 
-$$  C_{month} = C_{day} \times  30 \quad \text{(Equation 40)}  $$
+$$ C*{month} = C*{day} \times 30 \quad \text{(Equation 40)} $$
 
-$$  C_{1M} tok = (C_{hour} / (TPS \times  3600)) \times  10⁶ \quad \text{(Equation 41)}  $$
+$$ C*{1M} tok = (C*{hour} / (TPS \times 3600)) \times 10⁶ \quad \text{(Equation 41)} $$
 
 where `R_elec` is the electricity rate ($/kWh), `H_day` is operating hours per day, and TPS is the decode speed.
 
 ### 6.3 Carbon Emissions
 
-$$  CO₂,hour = E_{hour} \times  I_{carbon} \quad \text{(Equation 42)}  $$
+$$ CO₂,hour = E*{hour} \times I*{carbon} \quad \text{(Equation 42)} $$
 
-$$  CO₂,annual = CO₂,hour \times  H_{day} \times  365 / 1000 \quad \text{tonnes (Equation 43)}  $$
+$$ CO₂,annual = CO₂,hour \times H\_{day} \times 365 / 1000 \quad \text{tonnes (Equation 43)} $$
 
 where `I_carbon` is the grid carbon intensity in kg CO₂/kWh. Default values and regional references:
 
@@ -493,13 +504,13 @@ where `I_carbon` is the grid carbon intensity in kg CO₂/kWh. Default values an
 
 For fine-tuning, the memory model extends to include gradients and optimizer states:
 
-$$  V_{FT} = V_{weights} + V_{gradients} + V_{optimizer} + V_{activations} \quad \text{(Equation 44)}  $$
+$$ V*{FT} = V*{weights} + V*{gradients} + V*{optimizer} + V\_{activations} \quad \text{(Equation 44)} $$
 
 ### 7.1 LoRA / QLoRA
 
 With LoRA, only low-rank adaptation matrices are trained. The additional memory is:
 
-$$  V_{LoRA} \approx  0.40 \times  V_{weights} \quad \text{(Equation 45)}  $$
+$$ V*{LoRA} \approx 0.40 \times V*{weights} \quad \text{(Equation 45)} $$
 
 This accounts for LoRA weights (typically <1% of base weights), their gradients (FP32), and 8-bit AdamW states.
 
@@ -507,9 +518,9 @@ This accounts for LoRA weights (typically <1% of base weights), their gradients 
 
 Full fine-tuning requires gradients for all parameters and optimizer states:
 
-$$  V_{gradients} = P_{total} \times  b_{train} \quad \text{(Equation 46)}  $$
+$$ V*{gradients} = P*{total} \times b\_{train} \quad \text{(Equation 46)} $$
 
-$$  V_{optimizer} = P_{total} \times  8 \quad \text{(AdamW FP32: momentum + variance) (Equation 47)}  $$
+$$ V*{optimizer} = P*{total} \times 8 \quad \text{(AdamW FP32: momentum + variance) (Equation 47)} $$
 
 Combined with the overhead factor of 2.0, this yields approximately 3× the weight memory for FP16 training with AdamW.
 
@@ -519,7 +530,8 @@ Combined with the overhead factor of 2.0, this yields approximately 3× the weig
 
 ### 8.1 GGUF Quantization Levels
 
-GGUF (GGML GGML GPT-Generated Unified Format) is the standard format for llama.cpp and compatible engines. The following table lists supported quantization levels:
+GGUF (GPT-Generated Unified Format) is the binary file format introduced by the llama.cpp project as a successor to the older GGML format. The name is not an official acronym —
+it is commonly rendered as "GGUF" without expansion. It is the standard format for llama.cpp and compatible inference engines. The following table lists supported quantization levels:
 
 | Level  | Label          | B/param | Description                                    |
 | ------ | -------------- | ------- | ---------------------------------------------- |
@@ -584,19 +596,21 @@ The calculator automatically discovers quantized variants by:
 
 ### Supported GPU Hardware
 
-| GPU       | VRAM (GB) | HBM BW (GB/s) | TFLOPS (FP16) | PCIe Gen | NVLink (GB/s) | NVS |
-| --------- | --------- | ------------- | ------------- | -------- | ------------- | --- |
-| H200 SXM | 141 | 4800 | 1979 | 5        | 900           | Yes |
-| H100 SXM | 80 | 3350 | 1979 | 5        | 900           | Yes |
-| H100 PCIe | 80        | 2000          | 756           | 5        | 0             | No  |
-| A100 80GB | 80        | 2000          | 312           | 4        | 600           | Yes |
-| A100 40GB | 40        | 1555          | 312           | 4        | 600           | Yes |
-| A6000 Ada | 48        | 960           | 182           | 4        | 0             | No  |
-| RTX 4090  | 24        | 1008          | 165           | 4        | 0             | No  |
-| RTX 3090  | 24        | 936           | 71            | 4        | 0             | No  |
-| L40S      | 48        | 864           | 366           | 4        | 0             | No  |
-| MI300X    | 192       | 5300          | 1307          | 5        | 400           | No  |
-| MI250X    | 128       | 3276          | 383           | 4        | 400           | No  |
+| GPU       | VRAM (GB) | HBM BW (GB/s) | TFLOPS FP16 (Dense) | TFLOPS FP16 (Sparse) | PCIe Gen | NVLink (GB/s) | NVS |
+| --------- | --------- | ------------- | ------------------- | -------------------- | -------- | ------------- | --- |
+| H200 SXM  | 141       | 4800          | 989                 | 1979                 | 5        | 900           | Yes |
+| H100 SXM  | 80        | 3350          | 989                 | 1979                 | 5        | 900           | Yes |
+| H100 PCIe | 80        | 2000          | 756                 | 1513                 | 5        | 0             | No  |
+| A100 80GB | 80        | 2000          | 312                 | 624                  | 4        | 600           | Yes |
+| A100 40GB | 40        | 1555          | 312                 | 624                  | 4        | 600           | Yes |
+| A6000 Ada | 48        | 960           | 182                 | 364                  | 4        | 0             | No  |
+| RTX 4090  | 24        | 1008          | 165                 | 330                  | 4        | 0             | No  |
+| RTX 3090  | 24        | 936           | 71                  | 142                  | 4        | 0             | No  |
+| L40S      | 48        | 864           | 366                 | 733                  | 4        | 0             | No  |
+| MI300X    | 192       | 5300          | 1307                | 2614                 | 5        | 400           | No  |
+| MI250X    | 128       | 3276          | 383                 | 383                  | 4        | 400           | No  |
+
+_Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubling throughput for supported operations compared to Dense matrices. Older architectures like MI250X (CDNA2) do not feature structured sparsity hardware acceleration._
 
 ### PCIe Bandwidth Reference
 
@@ -670,6 +684,3 @@ The calculator automatically discovers quantized variants by:
 - **Ridge Point** — The arithmetic intensity at which a GPU transitions from bandwidth-bound to compute-bound execution, equal to `TFLOPS / BW_HBM`.
 - **TP** — Tensor Parallelism: a multi-GPU strategy that splits model weights across GPUs, requiring all-reduce communication after each layer.
 - **PP** — Pipeline Parallelism: a multi-GPU strategy that splits model layers across GPUs sequentially, requiring only activation tensor communication between stages.
-
-
-
