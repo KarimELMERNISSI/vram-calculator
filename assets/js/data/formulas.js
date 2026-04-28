@@ -45,6 +45,40 @@ var STATIC_FORMULAS = {
   roofline_model: "\\text{Arithmetic Intensity} = \\frac{\\text{FLOPs}}{\\text{Bytes accessed}} = \\frac{2}{b}",
   numa_effects: "\\text{BW}_{remote} \\approx 0.5 \\times \\text{BW}_{local}",
   pipeline_parallelism: "T_{PP} = \\sum_{i=1}^{N} T_{compute,i} + (N-1) \\times T_{bubble}",
+
+  // ═══════════════════════════════════════════════════════════
+  // N1-N10: OFFLOADING REGIME MODEL FORMULAS
+  // ═══════════════════════════════════════════════════════════
+
+  // N1: VRAM Priority Allocation
+  vram_priority: "V_{kv,VRAM}^{max} = \\max(0, V_{VRAM} - V_{weights})",
+
+  // N2: Regime Classification
+  regime_classification: "\\text{Regime} = \\begin{cases} A & V_{total} \\leq V_{VRAM} \\\\ B & V_{weights} \\leq V_{VRAM}, V_{kv} > V_{kv,VRAM}^{max} \\\\ C & V_{weights} > V_{VRAM}, V_{kv} \\leq V_{kv,VRAM}^{max} \\\\ D & V_{weights} > V_{VRAM}, V_{kv} > V_{kv,VRAM}^{max} \\end{cases}",
+
+  // N3: TPS for Regime B (same as A!)
+  regime_b_tps: "\\text{TPS}_B = \\text{TPS}_A = \\frac{BW_{HBM}}{P_{active} \\times b}",
+
+  // N4: KV Swap-In Latency
+  kv_swap_latency: "T_{kv,swap} = \\frac{V_{kv,RAM}}{BW_{transfer}}",
+
+  // N5: TTFT for Regime B
+  regime_b_ttft: "\\text{TTFT}_B = \\text{TTFT}_A + T_{kv,swap}",
+
+  // N6: TTFT for Regime C
+  regime_c_ttft: "\\text{TTFT}_C = \\max(T_{compute}, T_{weight\\_load})",
+
+  // N7: TTFT for Regime D
+  regime_d_ttft: "\\text{TTFT}_D = \\max(T_{compute}, T_{weight\\_load}) + T_{kv,swap}",
+
+  // N8: Concurrency Limits
+  concurrency_limits: "U_{active} = \\lfloor V_{kv,VRAM}^{max} / V_{kv,user} \\rfloor, \\quad U_{swapped} = \\lfloor V_{RAM,kv} / V_{kv,user} \\rfloor",
+
+  // N9: Effective Throughput with Swapping
+  effective_throughput: "\\text{TPS}_{eff} = U_{active} \\times \\text{TPS} + U_{swapped} \\times \\text{TPS} \\times \\eta_{swap}",
+
+  // N10: Quantization vs Offload Decision
+  quant_vs_offload: "b_{fit} = V_{VRAM} / P_{total}, \\quad \\text{Quantize if } f_{RAM} \\times \\text{Bus Wall} > 2"
 };
 
 /**
@@ -60,4 +94,10 @@ var RESULT_TEMPLATES = {
   pcie_eff: "\\text{PCIe}_{eff} = {pcieTheoretical} \\times {pcieLanes}/16 \\times {PCIE_EFFICIENCY} = {pcieEffective} \\text{ GB/s}",
   ram_eff: "\\text{RAM}_{eff} = {ramTheoretical} \\times {RAM_EFFICIENCY} \\times {numaFactor} = {ramEffective} \\text{ GB/s}",
   bus_wall: "\\text{Bus Wall} = \\frac{{gpuBw}}{\\min({pcieEffective}, {ramEffective})} = \\frac{{gpuBw}}{{transferBW}} = {busWallRatio}\\times",
+
+  // N2: Regime classification result template
+  regime_class: "\\text{Regime {regime}}: W_{VRAM}={wVRAM}, W_{RAM}={wRAM}, KV_{VRAM}={kvVRAM}, KV_{RAM}={kvRAM}",
+
+  // N4: KV swap result template
+  kv_swap: "T_{kv,swap} = \\frac{{kvRAM}}{transferBW} = {kvSwapMs} \\text{ ms}"
 };

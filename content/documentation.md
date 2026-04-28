@@ -32,7 +32,7 @@ The calculator addresses two primary deployment scenarios:
 
 Total GPU memory consumption is modeled as the sum of three primary components:
 
-$$ V*{total} = V*{weights} + V*{kv} + V*{overhead} \quad \text{(Equation 1)} $$
+$$ V_{total} = V_{weights} + V_{kv} + V_{overhead} \quad \text{(Equation 1)} $$
 
 where `V_weights` is the memory for model parameters, `V_kv` is the KV cache memory, and `V_overhead` accounts for framework and runtime overhead.
 
@@ -40,7 +40,7 @@ where `V_weights` is the memory for model parameters, `V_kv` is the KV cache mem
 
 The dominant memory component is the storage of model weights. Its size is determined by the total parameter count and the precision (bytes per parameter):
 
-$$ V*{weights} = P*{total} \times b\_{param} \quad \text{(Equation 2)} $$
+$$ V_{weights} = P_{total} \times b_{param} \quad \text{(Equation 2)} $$
 
 **Definition — Total Parameters:**  
 `P_total` is the total number of learnable parameters in the model, including _all_ experts for Mixture-of-Experts (MoE) architectures. For dense models, `P_total = P_active`. For MoE models, `P_total ≫ P_active` since only a subset of experts is activated per token.
@@ -65,7 +65,7 @@ $$ V*{weights} = P*{total} \times b\_{param} \quad \text{(Equation 2)} $$
 
 During autoregressive generation, the model caches past Key and Value states from attention layers to avoid recomputation. The KV cache size is:
 
-$$ V*{kv} = 2 \times L \times n*{kv} \times d*{h} \times C \times B \times U \times b*{kv} \quad \text{(Equation 3)} $$
+$$ V_{kv} = 2 \times L \times n_{kv} \times d_{h} \times C \times B \times U \times b_{kv} \quad \text{(Equation 3)} $$
 
 where the factor of 2 accounts for separate Key and Value tensors.
 
@@ -95,7 +95,7 @@ For example, Llama 3.1 70B uses GQA with `n_q = 64` query heads but only `n_kv =
 
 When architecture details (`L`, `n_kv`, `d_h`) are unavailable, the calculator falls back to a rule-of-thumb estimate:
 
-$$ V*{kv} \approx P*{total} \times 0.12 \times (C / 4096) \times B \times U \quad \text{(Equation 4)} $$
+$$ V_{kv} \approx P_{total} \times 0.12 \times (C / 4096) \times B \times U \quad \text{(Equation 4)} $$
 
 This assumes KV cache is approximately 12% of weight memory at 4096-token context for a typical GQA model.
 
@@ -103,7 +103,7 @@ This assumes KV cache is approximately 12% of weight memory at 4096-token contex
 
 Framework overhead includes CUDA kernels, temporary buffers, activation memory, and communication buffers. It is estimated as a fraction of weight memory:
 
-$$ V*{overhead} = V*{weights} \times f\_{overhead} \quad \text{(Equation 5)} $$
+$$ V_{overhead} = V_{weights} \times f_{overhead} \quad \text{(Equation 5)} $$
 
 where `f_overhead` varies by operation mode:
 
@@ -124,23 +124,30 @@ For full fine-tuning, the overhead factor of 2.0 accounts for gradients (1× wei
 
 When the total required memory exceeds available VRAM, the calculator supports an optional RAM offloading mode:
 
-$$ V*{overflow} = \max(0, V*{total} - V\_{VRAM}) \quad \text{(Equation 6)} $$
+$$ V_{overflow} = \max(0, V_{total} - V_{VRAM}) \quad \text{(Equation 6)} $$
 
-$$ V*{RAM,usable} = \min(V*{overflow,} V\_{RAM,available}) \quad \text{(Equation 7)} $$
+$$ V_{RAM,usable} = \min(V_{overflow}, V_{RAM,available}) \quad \text{(Equation 7)} $$
 
 The effective available memory becomes:
 
-$$ V*{effective} = V*{VRAM} + V\_{RAM,usable} \quad \text{(Equation 8)} $$
+$$ V_{effective} = V_{VRAM} + V_{RAM,usable} \quad \text{(Equation 8)} $$
+
+**Memory Allocation Parameters:**
+- **`V_overflow`**: The amount of required memory that exceeds the physical GPU VRAM capacity.
+- **`V_VRAM`**: The total physical Video RAM available on the GPU.
+- **`V_RAM,usable`**: The actual amount of system RAM that will be used for offloading.
+- **`V_RAM,available`**: The total physical System RAM available on the host machine.
+- **`V_effective`**: The total combined memory (VRAM + usable RAM) available for inference.
 
 ### 3.1 The Bus Wall ("Le Mur du Bus")
 
 The fundamental performance limitation of RAM offloading is captured by the **Bus Wall** concept — the ratio of GPU HBM bandwidth to the effective transfer bandwidth between CPU and GPU:
 
-$$ Bus Wall Ratio = BW*{HBM} / BW*{transfer} \quad \text{(Equation 9)} $$
+$$ Bus Wall Ratio = BW_{HBM} / BW_{transfer} \quad \text{(Equation 9)} $$
 
 where `BW_transfer` is the effective bandwidth of the data path from system RAM to GPU, determined by the bottleneck in the transfer chain:
 
-$$ BW*{transfer} = \min(BW*{PCIe,effective,} BW\_{RAM,effective}) \quad \text{(Equation 10)} $$
+$$ BW_{transfer} = \min(BW_{PCIe,effective}, BW_{RAM,effective}) \quad \text{(Equation 10)} $$
 
 The Bus Wall ratio tells you how many times slower RAM-offloaded layers are compared to VRAM-resident layers. Typical values range from 30× (RTX 4090 with Gen4 x16) to over 100× (H100 SXM with Gen5 x16).
 
@@ -148,19 +155,158 @@ The Bus Wall ratio tells you how many times slower RAM-offloaded layers are comp
 
 The performance degradation from RAM offloading is modeled by decomposing the decode time into two independent data paths:
 
-$$ T*{decode} = W*{VRAM} / BW*{HBM} + W*{RAM} / BW\_{transfer} \quad \text{(Equation 11)} $$
+$$ T_{decode} = W_{VRAM} / BW_{HBM} + W_{RAM} / BW_{transfer} \quad \text{(Equation 11)} $$
 
-where `W_VRAM` is the fraction of weights in VRAM and `W_RAM` is the fraction offloaded to RAM. This two-path model is more accurate than a simple degradation factor because it correctly accounts for the fact that VRAM-resident layers still run at full HBM speed, while only the offloaded portion is slowed by the Bus Wall.
+where **`W_VRAM`** is the absolute amount of weights stored in VRAM (in GB), and **`W_RAM`** is the absolute amount of weights offloaded to system RAM (in GB). This two-path model is more accurate than a simple degradation factor because it correctly accounts for the fact that VRAM-resident layers still run at full HBM speed, while only the offloaded portion is slowed by the Bus Wall.
 
 The fraction of weights in RAM is:
 
-$$ f*{RAM} = V*{RAM,usable} / V\_{total} \quad \text{(Equation 12)} $$
+$$ f_{RAM} = V_{RAM,usable} / V_{total} \quad \text{(Equation 12)} $$
 
 Substituting, the effective decode speed becomes:
 
-$$ TPS*{offload} = 1 / ((1-f*{RAM}) \times W / BW*{HBM} + f*{RAM} \times W / BW\_{transfer}) \quad \text{(Equation 13)} $$
+$$ TPS_{offload} = 1 / ((1-f_{RAM}) \times W / BW_{HBM} + f_{RAM} \times W / BW_{transfer}) \quad \text{(Equation 13)} $$
 
-where `W = P_active × b_param` is the total weight memory in GB.
+where **`W`** (`W = P_active × b_param / 10^9`) is the total active weight memory in GB.
+
+### 3.3 VRAM Priority Allocation & Offloading Regimes
+
+The previous offloading model treated all RAM offloading uniformly, applying the Bus Wall penalty to the entire decode process. However, the two primary components that can be offloaded — model weights and KV cache — have fundamentally different performance implications when offloaded:
+
+- **Weight offloading**: Causes a Bus Wall penalty on _every decode token_, because each token generation requires reading all weights from memory. This is catastrophic for throughput.
+- **KV Cache offloading**: Only impacts TTFT (one-time swap-in latency per context switch), because the KV cache is read once at the start of generation and then remains resident during decoding. Decode speed is unaffected.
+
+This distinction leads to a priority-based VRAM allocation model and four distinct performance regimes.
+
+#### N1: VRAM Priority Allocation
+
+When VRAM is scarce, it must be allocated with careful prioritization. Model weights receive VRAM priority over KV cache because weight offloading causes a per-token Bus Wall penalty, while KV offloading only causes a one-time swap cost:
+
+$$ V_{kv,VRAM}^{max} = \max(0, V_{VRAM} - V_{weights} - V_{overhead}) \quad \text{(Equation 13a)} $$
+
+The actual KV cache stored in VRAM is then:
+
+$$ V_{kv,VRAM} = \min(V_{kv}, V_{kv,VRAM}^{max}) \quad \text{(Equation 13b)} $$
+
+And the KV cache that must be stored in RAM:
+
+$$ V_{kv,RAM} = \max(0, V_{kv} - V_{kv,VRAM}^{max}) \quad \text{(Equation 13c)} $$
+
+If weights alone exceed VRAM, then all VRAM is used for (partial) weights and all KV must go to RAM:
+
+$$ V_{weights,RAM} = \max(0, V_{weights} - V_{VRAM} + V_{overhead}) \quad \text{(Equation 13d)} $$
+
+**KV Cache & Weight Allocation Parameters:**
+- **`V_{kv,VRAM}^{max}`**: The theoretical maximum amount of KV cache that can fit into VRAM after weights and overhead are accounted for.
+- **`V_{kv,VRAM}`**: The actual amount of KV cache stored in VRAM.
+- **`V_{kv,RAM}`**: The remaining KV cache that must be offloaded to system RAM.
+- **`V_{weights,RAM}`**: The amount of model weights offloaded to system RAM (this only occurs if weights alone exceed VRAM capacity).
+
+#### N2: Regime Classification
+
+Based on the allocation, the deployment falls into one of four performance regimes:
+
+| Regime | Condition                                    | Description                                                 |
+| ------ | -------------------------------------------- | ----------------------------------------------------------- |
+| A      | `V_total ≤ V_VRAM`                           | All in VRAM. Full HBM performance.                          |
+| B      | `V_weights ≤ V_VRAM`, `V_kv > V_kv_VRAM_max` | Weights in VRAM, KV in RAM. Full decode speed, TTFT + swap. |
+| C      | `V_weights > V_VRAM`, `V_kv ≤ V_kv_VRAM_max` | Weights in RAM, KV in VRAM. Bus Wall on every token. (Rare) |
+| D      | `V_weights > V_VRAM`, `V_kv > V_kv_VRAM_max` | Both in RAM. Bus Wall + KV swap. Worst case.                |
+
+> **Key Insight: Why Regime B is dramatically better than C/D**
+> In Regime B, decode speed equals Regime A (full HBM speed) because weights are still read from VRAM. The KV cache swap penalty only affects TTFT, not per-token throughput. In contrast, Regimes C and D impose the Bus Wall on every single decode token, making decode 30–100× slower. This is why the VRAM priority allocation (weights first) is so important.
+
+#### N3: Decode Speed in Regime B
+
+In Regime B, all weights reside in VRAM, so decode proceeds at full HBM speed:
+
+$$ TPS_B = TPS_A = BW_{HBM} / (P_{active} \times b_{param}) \quad \text{(Equation 14)} $$
+
+This is the critical result: **KV cache offloading does not slow down decode**. Only the initial context loading (TTFT) is impacted.
+
+#### N4: KV Cache Swap-In Latency
+
+When a user's KV cache is stored in RAM, it must be swapped into VRAM before generation can begin. This is a one-time cost per context switch:
+
+$$ T_{kv,swap} = V_{kv,RAM} / BW_{transfer} \quad \text{(Equation 15)} $$
+
+where `BW_transfer = min(BW_PCIe_effective, BW_RAM_effective)` is the same transfer bandwidth used in the Bus Wall calculation.
+
+#### N5: TTFT in Regime B
+
+The time to first token in Regime B adds the KV swap penalty to the standard prefill time:
+
+$$ TTFT_B = TTFT_A + T_{kv,swap} \quad \text{(Equation 16)} $$
+
+This means the first token for a user with offloaded KV cache is delayed by the swap time, but all subsequent tokens generate at full decode speed.
+
+#### N6: TTFT in Regime C
+
+In Regime C, weight offloading means that the prompt must wait for weights to be loaded from RAM before each layer can compute. The effective TTFT is:
+
+$$ TTFT_C = \max(T_{compute}, T_{weight,load}) \quad \text{(Equation 17)} $$
+
+**Time Parameters:**
+- **`T_{compute}`**: The theoretical time to compute the forward pass if all data were instantly available in HBM.
+- **`T_{weight,load}`** (`= V_{weights,RAM} / BW_{transfer}`): The time required to load the offloaded weights from system RAM over the PCIe/RAM transfer bus.
+
+In practice, `T_{weight,load} \gg T_{compute}` because the Bus Wall ratio is typically 30–100×.
+
+#### N7: TTFT in Regime D
+
+Regime D combines the worst of both worlds:
+
+$$ TTFT_D = \max(T_{compute}, T_{weight,load}) + T_{kv,swap} \quad \text{(Equation 18)} $$
+
+Both the weight loading penalty and the KV swap penalty apply. This regime should be avoided whenever possible.
+
+#### N8: Concurrency Limits with KV Offloading
+
+When KV cache is partially stored in RAM, the number of simultaneously served users splits into two groups. Active users have their KV cache entirely in VRAM and experience no swap penalty; swapped users have their KV in RAM and pay the swap cost on context switches:
+
+$$ U_{active} = \lfloor V_{kv,VRAM}^{max} / V_{kv,per user} \rfloor \quad \text{(Equation 19)} $$
+
+$$ U_{swapped} = \lfloor V_{RAM,for KV} / V_{kv,per user} \rfloor \quad \text{(Equation 20)} $$
+
+$$ U_{total} = U_{active} + U_{swapped} \quad \text{(Equation 21)} $$
+
+**Concurrency Parameters:**
+- **`U_{active}`**: The number of concurrent users whose entire KV cache fits within VRAM (no swap penalty).
+- **`U_{swapped}`**: The number of concurrent users whose KV cache is stored in RAM (incurs a swap penalty on context switch).
+- **`V_{kv,per user}`** (`= 2 × L × n_{kv} × d_h × C × b_{kv} / 10^9`): The KV cache size per individual user in GB.
+
+#### N9: Effective Throughput with KV Swapping
+
+Total throughput with KV swapping accounts for the time spent swapping vs. generating:
+
+$$ TPS_{eff} = U_{active} \times TPS + U_{swapped} \times TPS \times \eta_{swap} \quad \text{(Equation 22)} $$
+
+where the swap efficiency `η_swap` depends on the ratio of swap time to generation time per context:
+
+$$ \eta_{swap} = 1 / (1 + T_{kv,swap} / T_{gen}) \quad \text{(Equation 23)} $$
+
+where **`T_{gen}`** is the total time spent generating tokens for a single user's response before switching context, and **`η_{swap}`** represents the resulting swap efficiency penalty.
+
+For long conversations (`T_{gen} \gg T_{kv,swap}`), `η_{swap} \approx 1` and the swap overhead is negligible. For short exchanges, swap overhead is more significant.
+
+#### N10: Quantization vs. Offload Decision Threshold
+
+When weights do not fit in VRAM, there is a strategic choice: (1) quantize weights more aggressively to fit in VRAM, or (2) keep higher precision but offload to RAM. The Bus Wall makes option 2 almost always inferior:
+
+$$ b_{fit} = (V_{VRAM} - V_{overhead}) / P_{total} \quad \text{(Equation 24)} $$
+
+where `b_fit` is the maximum bytes per parameter that allows all weights to fit in VRAM. The decision rule is:
+
+**Quantize if** `f_RAM × Bus Wall Ratio > 2` **(Equation 25)**
+
+Since typical Bus Wall ratios range from 30–100×, even a small fraction of weights in RAM creates a severe performance penalty. For example, a 70B model at Q4 (35 GB) fits in a single 80 GB A100 with room for KV cache. The same model at FP16 (140 GB) requires offloading 60 GB to RAM, resulting in decode that is ~50× slower — far worse than any quality loss from Q4 quantization.
+
+> **Best Practices for Offloading**
+>
+> 1. **Quantize weights first**: Reduce `b_param` until `V_weights ≤ V_VRAM`. This avoids Regimes C/D entirely.
+> 2. **Quantize KV cache second**: If KV cache still overflows after weight quantization, reduce `b_kv` to FP8 or INT8. This halves or quarters the KV memory.
+> 3. **Use KV offloading for concurrency**: Regime B (KV in RAM, weights in VRAM) is acceptable for multi-user serving because decode speed is preserved.
+> 4. **Hardware matching**: DDR5 + PCIe Gen5 makes KV swap faster (57 GB/s vs 28 GB/s for Gen4), reducing the Regime B penalty.
 
 ---
 
@@ -189,7 +335,7 @@ PCI Express (PCIe) is the primary data highway between the CPU and GPU. Its band
 
 Theoretical PCIe bandwidth is calculated as:
 
-$$ BW*{PCIe,theoretical} = R*{GT}/s \times N\_{lanes} \times (128/130 (for PCIe Gen 3.0+)) \div 8 \quad \text{(Equation 14)} $$
+$$ BW_{PCIe,theoretical} = R_{GT}/s \times N_{lanes} \times (128/130 (for PCIe Gen 3.0+)) \div 8 \quad \text{(Equation 26)} $$
 
 where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (typically 16, 8, or 4), and the 128/130 (for PCIe Gen 3.0+) factor accounts for the encoding overhead introduced in PCIe 3.0+.
 
@@ -203,7 +349,7 @@ where `R_GT/s` is the transfer rate per lane, `N_lanes` is the number of lanes (
 
 Theoretical bandwidth is never fully achieved. Protocol overhead reduces practical throughput:
 
-$$ BW*{PCIe,effective} = BW*{PCIe,theoretical} \times η\_{PCIe} \quad \text{(Equation 15)} $$
+$$ BW_{PCIe,effective} = BW_{PCIe,theoretical} \times η_{PCIe} \quad \text{(Equation 27)} $$
 
 where `η_PCIe ≈ 0.90` for large sequential DMA transfers. The overhead comes from:
 
@@ -230,7 +376,7 @@ Reducing from x16 to x8 exactly halves the available bandwidth, which significan
 
 System RAM bandwidth is determined by the memory type, transfer rate, and number of channels:
 
-$$ BW*{RAM,theoretical} = MT/s \times N*{channels} \times 8 bytes/transfer \quad \text{(Equation 16)} $$
+$$ BW_{RAM,theoretical} = MT/s \times N_{channels} \times 8 bytes/transfer \quad \text{(Equation 28)} $$
 
 | Configuration  | MT/s | Channels | BW (GB/s) |
 | -------------- | ---- | -------- | --------- |
@@ -245,7 +391,7 @@ $$ BW*{RAM,theoretical} = MT/s \times N*{channels} \times 8 bytes/transfer \quad
 
 As with PCIe, theoretical RAM bandwidth is not fully achievable:
 
-$$ BW*{RAM,effective} = BW*{RAM,theoretical} \times η*{RAM} \times f*{NUMA} \quad \text{(Equation 17)} $$
+$$ BW_{RAM,effective} = BW_{RAM,theoretical} \times η_{RAM} \times f_{NUMA} \quad \text{(Equation 29)} $$
 
 where `η_RAM ≈ 0.85` accounts for DRAM refresh cycles, row misses, and memory controller scheduling, and `f_NUMA` is the NUMA efficiency factor.
 
@@ -253,7 +399,7 @@ where `η_RAM ≈ 0.85` accounts for DRAM refresh cycles, row misses, and memory
 
 On multi-socket servers (AMD EPYC, Intel Xeon), each CPU socket has its own memory controller and attached RAM. Accessing RAM on the local socket is fast, but accessing RAM attached to a remote socket traverses an inter-socket link (AMD Infinity Fabric or Intel UPI) that adds latency and reduces bandwidth by 30–50%:
 
-$$ f\_{NUMA} = 1.0 \quad \text{(Equation 18)} $$ if NUMA-aware (weights on local socket)
+$$ f_{NUMA} = 1.0 \quad \text{(Equation 30)} $$ if NUMA-aware (weights on local socket)
 
 > `f_NUMA = 0.65` if no NUMA awareness (potential cross-socket access)
 
@@ -270,7 +416,7 @@ When RAM-offloaded layers are accessed during inference, data must traverse the 
 
 The bottleneck in this chain is the slower of PCIe effective bandwidth and RAM effective bandwidth:
 
-$$ BW*{transfer} = \min(BW*{PCIe,effective,} BW\_{RAM,effective}) \quad \text{(Equation 19)} $$
+$$ BW_{transfer} = \min(BW_{PCIe,effective}, BW_{RAM,effective}) \quad \text{(Equation 31)} $$
 
 In most configurations, PCIe is the bottleneck. Even DDR4 2-channel at 51.2 GB/s theoretical (≈43 GB/s effective) exceeds PCIe Gen4 x8 at ≈14 GB/s effective. However, with fast PCIe Gen5 x16 (≈57 GB/s effective), slower RAM configurations (DDR4 2-channel) can become the bottleneck instead.
 
@@ -293,7 +439,9 @@ LLM decode is almost always HBM-bandwidth-bound: each token generation requires 
 
 GPU clock speed (typically 1.5–2.5 GHz) affects compute throughput (TFLOPS) but has limited impact on bandwidth-bound inference. The relationship between clock speed and compute throughput is:
 
-$$ TFLOPS = N*{cores} \times f*{clock} \times 2 FLOP/clock/core (CUDA cores, FMA operation) \quad \text{(Equation 20)} $$
+$$ TFLOPS = N_{cores} \times f_{clock} \times 2 \quad \text{FLOP/clock/core (CUDA cores, FMA operation) (Equation 32)} $$
+
+where **`N_{cores}`** is the number of CUDA cores and **`f_{clock}`** is the GPU clock frequency in GHz.
 
 Note: This formula applies to standard CUDA scalar cores only.
 Tensor Core throughput is architecture- and precision-specific (e.g., H100 FP16
@@ -309,15 +457,15 @@ The roofline model provides a unified framework for understanding whether a work
 **Definition — Arithmetic Intensity:**  
 Arithmetic intensity is the ratio of FLOPs performed to bytes of data accessed:
 
-$$ AI = FLOPs / Bytes accessed \quad \text{(Equation 21)} $$
+$$ AI = FLOPs / Bytes accessed \quad \text{(Equation 33)} $$
 
 For LLM decode with active parameters `P_active` stored at `b` bytes per parameter:
 
-$$ AI*{decode} = (2 \times P*{active}) / (P\_{active} \times b) = 2/b \quad \text{(Equation 22)} $$
+$$ AI_{decode} = (2 \times P_{active}) / (P_{active} \times b) = 2/b \quad \text{(Equation 34)} $$
 
 At Q4 (`b = 0.5`), the arithmetic intensity is only 4 FLOP/byte. At FP16 (`b = 2`), it drops to 1 FLOP/byte. These values are far below the GPU's ridge point (the arithmetic intensity at which compute and bandwidth are equally limiting):
 
-$$ AI*{ridge} = TFLOPS / BW*{HBM} \quad \text{(Equation 23)} $$
+$$ AI_{ridge} = TFLOPS / BW_{HBM} \quad \text{(Equation 35)} $$
 
 For H100, using the dense FP16 figure as a conservative ceiling:
 `AI_ridge = 989 / 3,350 ≈ 295 FLOP/byte` (dense, non-sparse)
@@ -348,12 +496,12 @@ NVLink uses a point-to-point topology: each GPU has direct links to specific oth
 
 NVSwitch is NVIDIA's switching fabric that provides full all-to-all connectivity between all GPUs in a node. Unlike point-to-point NVLink, NVSwitch allows any GPU to communicate with any other GPU at full NVLink speed simultaneously.
 
-> **Equation 24** — All-reduce with NVSwitch:  
+> **Equation 36** — All-reduce with NVSwitch:  
 > `All-reduce_NVSwitch = 2 × (h × 2) / BW_NVLink`
 
 vs. ring all-reduce on point-to-point NVLink:
 
-$$ All-reduce*{ring} = 2 \times ((N-1)/N) \times (h \times 2) / BW*{NVLink} \quad \text{(Equation 25)} $$
+$$ All-reduce_{ring} = 2 \times ((N-1)/N) \times (h \times 2) / BW_{NVLink} \quad \text{(Equation 37)} $$
 
 where `h` is the hidden size and `N` is the number of GPUs. NVSwitch eliminates the `(N−1)/N` penalty and reduces the number of hops, providing significantly better TP efficiency for 4+ GPUs.
 
@@ -373,13 +521,13 @@ TP splits model weights across `N` GPUs. Each GPU holds `1/N` of the weights and
 
 The decode time per token with TP is:
 
-$$ T*{TP} = (P*{active} \times b) / (N \times BW*{HBM}) + L \times ((2 \times (N-1)/N \times h \times 2) / BW*{interconnect} + λ\_{AR}) \quad \text{(Equation 26)} $$
+$$ T_{TP} = (P_{active} \times b) / (N \times BW_{HBM}) + L \times ((2 \times (N-1)/N \times h \times 2) / BW_{interconnect} + λ_{AR}) \quad \text{(Equation 38)} $$
 
 where `λ_AR` is the all-reduce latency per layer (5–100 μs depending on interconnect).
 
 TP efficiency is:
 
-$$ η*{TP} = T*{compute} / (T*{compute} + T*{communication}) \quad \text{(Equation 27)} $$
+$$ η_{TP} = T_{compute} / (T_{compute} + T_{communication}) \quad \text{(Equation 39)} $$
 
 | Interconnect      | 2-GPU | 4-GPU | 8-GPU |
 | ----------------- | ----- | ----- | ----- |
@@ -395,7 +543,7 @@ PP splits model layers across GPUs sequentially. Each GPU processes a contiguous
 
 However, PP introduces pipeline bubbles — idle time where GPUs wait for preceding stages to complete:
 
-$$ Bubble fraction = (N-1) / (N + M - 1) \quad \text{(Equation 28)} $$
+$$ Bubble fraction = (N-1) / (N + M - 1) \quad \text{(Equation 40)} $$
 
 where `M` is the number of micro-batches. For single-user inference with batch size 1, only 1 micro-batch is possible, giving bubble fraction `(N−1)/N`.
 
@@ -409,7 +557,7 @@ For very large models on many GPUs, both strategies can be combined: TP within a
 
 The complete decode time model accounts for all connectivity factors:
 
-$$ T*{decode} = (1-f*{RAM}) \times W / (η*{TP} \times N \times BW*{HBM}) + f*{RAM} \times W / \min(η*{PCIe} \times BW*{PCIe,} η*{RAM} \times f*{NUMA} \times BW*{RAM}) \quad \text{(Equation 29)} $$
+$$ T_{decode} = (1-f_{RAM}) \times W / (η_{TP} \times N \times BW_{HBM}) + f_{RAM} \times W / \min(η_{PCIe} \times BW_{PCIe}, η_{RAM} \times f_{NUMA} \times BW_{RAM}) \quad \text{(Equation 41)} $$
 
 This formula captures the essential physics of LLM inference:
 
@@ -427,7 +575,7 @@ This formula captures the essential physics of LLM inference:
 
 During autoregressive decoding, each token generation requires loading all model weights from GPU memory. This makes inference **bandwidth-bound**:
 
-$$ TPS = BW / (P*{active} \times b*{param} \times 1000) \quad \text{(Equation 30)} $$
+$$ TPS = BW / (P_{active} \times b_{param} \times 1000) \quad \text{(Equation 42)} $$
 
 where `BW` is the GPU memory bandwidth in GB/s. For MoE models, `P_active` (the number of parameters active per forward pass) is used instead of `P_total`, since only the routed experts are loaded during decode.
 
@@ -438,7 +586,7 @@ For dense models, `P_active = P_total`. For MoE models, `P_active` represents on
 
 The prefill phase processes the entire prompt in parallel. The time to first token is estimated as:
 
-$$ TTFT = (P*{active} \times C \times 2 \times b*{param}) / BW \times 1000 ms \quad \text{(Equation 31)} $$
+$$ TTFT = (P_{active} \times C \times 2 \times b_{param}) / BW \times 1000 ms \quad \text{(Equation 43)} $$
 
 where `C` is the prompt length in tokens. The factor of 2 accounts for the read and write of activations during the forward pass.
 
@@ -446,13 +594,13 @@ where `C` is the prompt length in tokens. The factor of 2 accounts for the read 
 
 The calculator provides additional derived metrics for practical deployment planning:
 
-$$ Latency per token = 1000 / TPS \quad \text{ms (Equation 32)} $$
+$$ Latency per token = 1000 / TPS \quad \text{ms (Equation 44)} $$
 
-$$ Time\_{100} = TTFT/1000 + 100/TPS \quad \text{seconds (Equation 33)} $$
+$$ Time_{100} = TTFT/1000 + 100/TPS \quad \text{seconds (Equation 45)} $$
 
-$$ Time\_{1000} = TTFT/1000 + 1000/TPS \quad \text{seconds (Equation 34)} $$
+$$ Time_{1000} = TTFT/1000 + 1000/TPS \quad \text{seconds (Equation 46)} $$
 
-$$ Throughput = TPS \times U \quad \text{tok/s total (Equation 35)} $$
+$$ Throughput = TPS \times U \quad \text{tok/s total (Equation 47)} $$
 
 ---
 
@@ -462,29 +610,29 @@ $$ Throughput = TPS \times U \quad \text{tok/s total (Equation 35)} $$
 
 GPU power consumption is estimated from the Thermal Design Power (TDP) and utilization:
 
-$$ P*{draw} = TDP \times (U*{GPU} / 100) \quad \text{(Equation 36)} $$
+$$ P_{draw} = TDP \times (U_{GPU} / 100) \quad \text{(Equation 48)} $$
 
-where `U_GPU` is the GPU utilization percentage. LLM inference is typically memory-bandwidth-bound rather than compute-bound, resulting in 60–90% utilization during decode.
+where **`U_{GPU}`** is the GPU utilization percentage. LLM inference is typically memory-bandwidth-bound rather than compute-bound, resulting in 60–90% utilization during decode.
 
 ### 6.2 Energy and Cost Calculations
 
-$$ E*{hour} = P*{draw} / 1000 \quad \text{kWh (Equation 37)} $$
+$$ E_{hour} = P_{draw} / 1000 \quad \text{kWh (Equation 49)} $$
 
-$$ C*{hour} = E*{hour} \times R\_{elec} \quad \text{(Equation 38)} $$
+$$ C_{hour} = E_{hour} \times R_{elec} \quad \text{(Equation 50)} $$
 
-$$ C*{day} = C*{hour} \times H\_{day} \quad \text{(Equation 39)} $$
+$$ C_{day} = C_{hour} \times H_{day} \quad \text{(Equation 51)} $$
 
-$$ C*{month} = C*{day} \times 30 \quad \text{(Equation 40)} $$
+$$ C_{month} = C_{day} \times 30 \quad \text{(Equation 52)} $$
 
-$$ C*{1M} tok = (C*{hour} / (TPS \times 3600)) \times 10⁶ \quad \text{(Equation 41)} $$
+$$ C_{1M} tok = (C_{hour} / (TPS \times 3600)) \times 10⁶ \quad \text{(Equation 53)} $$
 
 where `R_elec` is the electricity rate ($/kWh), `H_day` is operating hours per day, and TPS is the decode speed.
 
 ### 6.3 Carbon Emissions
 
-$$ CO₂,hour = E*{hour} \times I*{carbon} \quad \text{(Equation 42)} $$
+$$ CO_{2,hour} = E_{hour} \times I_{carbon} \quad \text{(Equation 54)} $$
 
-$$ CO₂,annual = CO₂,hour \times H\_{day} \times 365 / 1000 \quad \text{tonnes (Equation 43)} $$
+$$ CO_{2,annual} = CO_{2,hour} \times H_{day} \times 365 / 1000 \quad \text{tonnes (Equation 55)} $$
 
 where `I_carbon` is the grid carbon intensity in kg CO₂/kWh. Default values and regional references:
 
@@ -504,13 +652,13 @@ where `I_carbon` is the grid carbon intensity in kg CO₂/kWh. Default values an
 
 For fine-tuning, the memory model extends to include gradients and optimizer states:
 
-$$ V*{FT} = V*{weights} + V*{gradients} + V*{optimizer} + V\_{activations} \quad \text{(Equation 44)} $$
+$$ V_{FT} = V_{weights} + V_{gradients} + V_{optimizer} + V_{activations} \quad \text{(Equation 56)} $$
 
 ### 7.1 LoRA / QLoRA
 
 With LoRA, only low-rank adaptation matrices are trained. The additional memory is:
 
-$$ V*{LoRA} \approx 0.40 \times V*{weights} \quad \text{(Equation 45)} $$
+$$ V_{LoRA} \approx 0.40 \times V_{weights} \quad \text{(Equation 57)} $$
 
 This accounts for LoRA weights (typically <1% of base weights), their gradients (FP32), and 8-bit AdamW states.
 
@@ -518,9 +666,9 @@ This accounts for LoRA weights (typically <1% of base weights), their gradients 
 
 Full fine-tuning requires gradients for all parameters and optimizer states:
 
-$$ V*{gradients} = P*{total} \times b\_{train} \quad \text{(Equation 46)} $$
+$$ V_{gradients} = P_{total} \times b_{train} \quad \text{(Equation 58)} $$
 
-$$ V*{optimizer} = P*{total} \times 8 \quad \text{(AdamW FP32: momentum + variance) (Equation 47)} $$
+$$ V_{optimizer} = P_{total} \times 8 \quad \text{(AdamW FP32: momentum + variance) (Equation 59)} $$
 
 Combined with the overhead factor of 2.0, this yields approximately 3× the weight memory for FP16 training with AdamW.
 
@@ -646,7 +794,7 @@ _Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubl
 
 5. **KV cache quantization**: Quality impact of aggressive KV cache quantization (Q4) is not modeled; it may degrade output quality for sensitive tasks.
 
-6. **RAM offloading**: The two-path decode model (`W_VRAM/BW_HBM + W_RAM/BW_transfer`) is a simplification. In practice, offloading engines (llama.cpp, vLLM) may use pipelined or overlapped transfers that partially hide latency.
+6. **RAM offloading**: The regime-aware model (N1–N10) distinguishes weight offloading from KV cache offloading, but still simplifies the real behavior of offloading engines. In practice, llama.cpp and vLLM may use pipelined or overlapped transfers that partially hide latency. The KV swap model assumes sequential swap-in, while real implementations may prefetch or stream KV cache during prefill.
 
 7. **Multi-GPU TP**: Estimates use the analytical all-reduce model with fixed latency. Real implementations may use custom all-reduce algorithms (e.g., NVLink SHARP, NCCL topology-aware) that differ from the ring model.
 
@@ -690,3 +838,6 @@ _Note: Sparse TFLOPS assume a 2:4 structured sparsity pattern, effectively doubl
 - **Dense TFLOPS** — Compute throughput calculated without assuming structural sparsity. Every operation in the matrix multiply is explicitly computed.
 - **Sparse TFLOPS** — Compute throughput assuming structured sparsity (e.g., 2:4 sparsity where 2 out of every 4 elements are zero). This allows specialized hardware (like Tensor Cores) to skip zero-multiplies, effectively doubling the theoretical throughput for supported operations.
 - **2:4 Structured Sparsity** — A sparsity pattern where exactly 2 out of every 4 consecutive weight elements are zero, in a fixed pattern. This is the only sparsity format natively accelerated by NVIDIA Tensor Cores (Ampere and later). Pruning a model to 2:4 sparsity typically preserves most of the model's accuracy while halving the compute required for matrix multiplications.
+- **Regime A/B/C/D** — Offloading regimes that classify how memory is distributed between VRAM and RAM, determining whether the Bus Wall penalty applies per-token (C/D) or only at context switch (B).
+- **KV Swap** — The one-time cost of loading a user's KV cache from RAM to VRAM before generation can begin. Only applies in Regimes B and D. Does not affect decode speed.
+- **VRAM Priority Allocation** — The rule that weights are allocated to VRAM before KV cache, because weight offloading causes a per-token Bus Wall penalty while KV offloading only causes a one-time swap cost.

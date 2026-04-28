@@ -73,12 +73,12 @@
 \newtheorem{definition}{Definition}[section]
 
 \title{LLM VRAM Calculator\\[0.3em]\large Technical Documentation \& Formula Reference}
-\author{Z.ai}
+\author{Karim El Mernissi}
 \date{\today}
 
 \hypersetup{
     pdftitle={LLM VRAM Calculator - Technical Documentation},
-    pdfauthor={Z.ai},
+    pdfauthor={Karim El Mernissi},
     pdfsubject={VRAM estimation, inference performance, and cost modeling for Large Language Models},
     pdfkeywords={VRAM, LLM, inference, quantization, KV cache, GPU memory}
 }
@@ -292,6 +292,175 @@ Substituting, the effective decode speed becomes:
 \end{equation}
 
 where $W = P_{\text{active}} \times b_{\text{param}}$ is the total weight memory in GB.
+
+\subsection{VRAM Priority Allocation \& Offloading Regimes}
+
+The previous offloading model treated all RAM offloading uniformly, applying the Bus Wall penalty to the entire decode process. However, the two primary components that can be offloaded --- model weights and KV cache --- have fundamentally different performance implications when offloaded:
+
+\begin{itemize}
+  \item \textbf{Weight offloading}: Causes a Bus Wall penalty on \emph{every decode token}, because each token generation requires reading all weights from memory. This is catastrophic for throughput.
+  \item \textbf{KV Cache offloading}: Only impacts TTFT (one-time swap-in latency per context switch), because the KV cache is read once at the start of generation and then remains resident during decoding. Decode speed is unaffected.
+\end{itemize}
+
+This distinction leads to a priority-based VRAM allocation model and four distinct performance regimes.
+
+\subsubsection{N1: VRAM Priority Allocation}
+
+When VRAM is scarce, it must be allocated with careful prioritization. Model weights receive VRAM priority over KV cache because weight offloading causes a per-token Bus Wall penalty, while KV offloading only causes a one-time swap cost:
+
+\begin{equation}\label{eq:kv_vram_max}
+V_{\text{kv,VRAM}}^{\max} = \max(0, \; V_{\text{VRAM}} - V_{\text{weights}} - V_{\text{overhead}})
+\end{equation}
+
+The actual KV cache stored in VRAM is then:
+
+\begin{equation}\label{eq:kv_vram_actual}
+V_{\text{kv,VRAM}} = \min(V_{\text{kv}}, \; V_{\text{kv,VRAM}}^{\max})
+\end{equation}
+
+And the KV cache that must be stored in RAM:
+
+\begin{equation}\label{eq:kv_ram}
+V_{\text{kv,RAM}} = \max(0, \; V_{\text{kv}} - V_{\text{kv,VRAM}}^{\max})
+\end{equation}
+
+If weights alone exceed VRAM, then all VRAM is used for (partial) weights and all KV must go to RAM:
+
+\begin{equation}\label{eq:weights_ram}
+V_{\text{weights,RAM}} = \max(0, \; V_{\text{weights}} - V_{\text{VRAM}} + V_{\text{overhead}})
+\end{equation}
+
+\subsubsection{N2: Regime Classification}
+
+Based on the allocation, the deployment falls into one of four performance regimes:
+
+\begin{table}[htbp]
+\centering
+\caption{Offloading regime classification.}\label{tab:regimes}
+\begin{tabularx}{0.95\textwidth}{clX}
+\toprule
+\textbf{Regime} & \textbf{Condition} & \textbf{Description} \\
+\midrule
+A & $V_{\text{total}} \leq V_{\text{VRAM}}$ & All in VRAM. Full HBM performance. \\
+B & $V_{\text{weights}} \leq V_{\text{VRAM}}$, $V_{\text{kv}} > V_{\text{kv,VRAM}}^{\max}$ & Weights in VRAM, KV in RAM. Full decode speed, TTFT + swap. \\
+C & $V_{\text{weights}} > V_{\text{VRAM}}$, $V_{\text{kv}} \leq V_{\text{kv,VRAM}}^{\max}$ & Weights in RAM, KV in VRAM. Bus Wall on every token. (Rare) \\
+D & $V_{\text{weights}} > V_{\text{VRAM}}$, $V_{\text{kv}} > V_{\text{kv,VRAM}}^{\max}$ & Both in RAM. Bus Wall + KV swap. Worst case. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{defbox}[Key Insight: Why Regime B is dramatically better than C/D]
+In Regime B, decode speed equals Regime A (full HBM speed) because weights are still read from VRAM. The KV cache swap penalty only affects TTFT, not per-token throughput. In contrast, Regimes C and D impose the Bus Wall on every single decode token, making decode 30--100$\times$ slower. This is why the VRAM priority allocation (weights first) is so important.
+\end{defbox}
+
+\subsubsection{N3: Decode Speed in Regime B}
+
+In Regime B, all weights reside in VRAM, so decode proceeds at full HBM speed:
+
+\begin{equation}\label{eq:regime_b_tps}
+\text{TPS}_B = \text{TPS}_A = \frac{BW_{\text{HBM}}}{P_{\text{active}} \times b_{\text{param}}}
+\end{equation}
+
+This is the critical result: \textbf{KV cache offloading does not slow down decode}. Only the initial context loading (TTFT) is impacted.
+
+\subsubsection{N4: KV Cache Swap-In Latency}
+
+When a user's KV cache is stored in RAM, it must be swapped into VRAM before generation can begin. This is a one-time cost per context switch:
+
+\begin{equation}\label{eq:kv_swap}
+T_{\text{kv,swap}} = \frac{V_{\text{kv,RAM}}}{BW_{\text{transfer}}}
+\end{equation}
+
+where $BW_{\text{transfer}} = \min(BW_{\text{PCIe,effective}}, BW_{\text{RAM,effective}})$ is the same transfer bandwidth used in the Bus Wall calculation.
+
+\subsubsection{N5: TTFT in Regime B}
+
+The time to first token in Regime B adds the KV swap penalty to the standard prefill time:
+
+\begin{equation}\label{eq:ttft_b}
+\text{TTFT}_B = \text{TTFT}_A + T_{\text{kv,swap}}
+\end{equation}
+
+This means the first token for a user with offloaded KV cache is delayed by the swap time, but all subsequent tokens generate at full decode speed.
+
+\subsubsection{N6: TTFT in Regime C}
+
+In Regime C, weight offloading means that the prompt must wait for weights to be loaded from RAM before each layer can compute. The effective TTFT is:
+
+\begin{equation}\label{eq:ttft_c}
+\text{TTFT}_C = \max(T_{\text{compute}}, \; T_{\text{weight,load}})
+\end{equation}
+
+where $T_{\text{weight,load}} = V_{\text{weights,RAM}} / BW_{\text{transfer}}$ is the time to load the offloaded weights. In practice, $T_{\text{weight,load}} \gg T_{\text{compute}}$ because the Bus Wall ratio is typically 30--100$\times$.
+
+\subsubsection{N7: TTFT in Regime D}
+
+Regime D combines the worst of both worlds:
+
+\begin{equation}\label{eq:ttft_d}
+\text{TTFT}_D = \max(T_{\text{compute}}, \; T_{\text{weight,load}}) + T_{\text{kv,swap}}
+\end{equation}
+
+Both the weight loading penalty and the KV swap penalty apply. This regime should be avoided whenever possible.
+
+\subsubsection{N8: Concurrency Limits with KV Offloading}
+
+When KV cache is partially stored in RAM, the number of simultaneously served users splits into two groups. Active users have their KV cache entirely in VRAM and experience no swap penalty; swapped users have their KV in RAM and pay the swap cost on context switches:
+
+\begin{equation}\label{eq:u_active}
+U_{\text{active}} = \left\lfloor \frac{V_{\text{kv,VRAM}}^{\max}}{V_{\text{kv,per user}}} \right\rfloor
+\end{equation}
+
+\begin{equation}\label{eq:u_swapped}
+U_{\text{swapped}} = \left\lfloor \frac{V_{\text{RAM,for KV}}}{V_{\text{kv,per user}}} \right\rfloor
+\end{equation}
+
+\begin{equation}\label{eq:u_total}
+U_{\text{total}} = U_{\text{active}} + U_{\text{swapped}}
+\end{equation}
+
+where $V_{\text{kv,per user}} = 2 \times L \times n_{kv} \times d_h \times C \times b_{kv} / 10^9$ is the KV cache size per individual user in GB.
+
+\subsubsection{N9: Effective Throughput with KV Swapping}
+
+Total throughput with KV swapping accounts for the time spent swapping vs. generating:
+
+\begin{equation}\label{eq:eff_throughput}
+\text{TPS}_{\text{eff}} = U_{\text{active}} \times \text{TPS} + U_{\text{swapped}} \times \text{TPS} \times \eta_{\text{swap}}
+\end{equation}
+
+where the swap efficiency $\eta_{\text{swap}}$ depends on the ratio of swap time to generation time per context:
+
+\begin{equation}\label{eq:swap_eff}
+\eta_{\text{swap}} = \frac{1}{1 + T_{\text{kv,swap}} / T_{\text{gen}}}
+\end{equation}
+
+For long conversations ($T_{\text{gen}} \gg T_{\text{kv,swap}}$), $\eta_{\text{swap}} \approx 1$ and the swap overhead is negligible. For short exchanges, swap overhead is more significant.
+
+\subsubsection{N10: Quantization vs. Offload Decision Threshold}
+
+When weights do not fit in VRAM, there is a strategic choice: (1) quantize weights more aggressively to fit in VRAM, or (2) keep higher precision but offload to RAM. The Bus Wall makes option 2 almost always inferior:
+
+\begin{equation}\label{eq:quant_threshold}
+b_{\text{fit}} = \frac{V_{\text{VRAM}} - V_{\text{overhead}}}{P_{\text{total}}}
+\end{equation}
+
+where $b_{\text{fit}}$ is the maximum bytes per parameter that allows all weights to fit in VRAM. The decision rule is:
+
+\begin{equation}\label{eq:quant_decision}
+\text{Quantize if } f_{\text{RAM}} \times \text{Bus Wall Ratio} > 2
+\end{equation}
+
+Since typical Bus Wall ratios range from 30--100$\times$, even a small fraction of weights in RAM creates a severe performance penalty. For example, a 70B model at Q4 (35 GB) fits in a single 80 GB A100 with room for KV cache. The same model at FP16 (140 GB) requires offloading 60 GB to RAM, resulting in decode that is $\sim$50$\times$ slower --- far worse than any quality loss from Q4 quantization.
+
+\begin{warnbox}[Best Practices for Offloading]
+\begin{enumerate}
+  \item \textbf{Quantize weights first}: Reduce $b_{\text{param}}$ until $V_{\text{weights}} \leq V_{\text{VRAM}}$. This avoids Regimes C/D entirely.
+  \item \textbf{Quantize KV cache second}: If KV cache still overflows after weight quantization, reduce $b_{\text{kv}}$ to FP8 or INT8. This halves or quarters the KV memory.
+  \item \textbf{Use KV offloading for concurrency}: Regime B (KV in RAM, weights in VRAM) is acceptable for multi-user serving because decode speed is preserved.
+  \item \textbf{Hardware matching}: DDR5 + PCIe Gen5 makes KV swap faster (57 GB/s vs 28 GB/s for Gen4), reducing the Regime B penalty.
+\end{enumerate}
+\end{warnbox}
 
 \section{Connectivity \& Bandwidth Architecture}
 
@@ -887,7 +1056,7 @@ Through CPU    & $\sim$100 $\mu$s & Multi-hop  & GPU $\to$ CPU $\to$ GPU \\
   \item \textbf{RAM efficiency}: The 0.85 factor for sequential RAM reads is an average. Actual values depend on DRAM type, frequency, and access pattern. Mixed read/write workloads achieve lower efficiency.
   \item \textbf{NUMA model}: The 0.65 factor for non-NUMA-aware allocation is an approximation. Actual cross-socket bandwidth depends on the inter-socket link (AMD Infinity Fabric, Intel UPI), memory topology, and system firmware configuration.
   \item \textbf{KV cache quantization}: Quality impact of aggressive KV cache quantization (Q4) is not modeled; it may degrade output quality for sensitive tasks.
-  \item \textbf{RAM offloading}: The two-path decode model ($W_{\text{VRAM}}/BW_{\text{HBM}} + W_{\text{RAM}}/BW_{\text{transfer}}$) is a simplification. In practice, offloading engines (llama.cpp, vLLM) may use pipelined or overlapped transfers that partially hide latency.
+  \item \textbf{RAM offloading}: The regime-aware model (N1--N10) distinguishes weight offloading from KV cache offloading, but still simplifies the real behavior of offloading engines. In practice, llama.cpp and vLLM may use pipelined or overlapped transfers that partially hide latency. The KV swap model assumes sequential swap-in, while real implementations may prefetch or stream KV cache during prefill.
   \item \textbf{Multi-GPU TP}: Estimates use the analytical all-reduce model with fixed latency. Real implementations may use custom all-reduce algorithms (e.g., NVLink SHARP, NCCL topology-aware) that differ from the ring model.
   \item \textbf{Pipeline Parallelism}: The bubble fraction model assumes single micro-batch inference. With continuous batching or multiple concurrent requests, the bubble can be hidden more effectively.
   \item \textbf{Framework overhead}: The 12\% inference overhead is a conservative average. vLLM and llama.cpp may use less; PyTorch native may use more.

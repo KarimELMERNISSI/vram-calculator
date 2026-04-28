@@ -1,6 +1,6 @@
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 // MAIN CALC
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════
 function calc() {
   var m = getModel();
   if (!m) return;
@@ -17,7 +17,8 @@ function calc() {
   var ctx = parseInt(document.getElementById("ctx").value);
   var bs = parseInt(document.getElementById("bs").value);
   var uS = parseInt(document.getElementById("uS").value || 1);
-  var isFT = document.getElementById("ftSel").style.display !== "none";
+  var ftSel = document.getElementById("ftSel");
+  var isFT = ftSel ? ftSel.style.display !== "none" : false;
   var tMv = isFT ? document.getElementById("tM").value : "inf";
   var gName = document.getElementById("gSel").value;
   var isCustomGpu = gName === "Custom GPU";
@@ -44,18 +45,19 @@ function calc() {
   var totV = gpu.vram * nG;
   document.getElementById("tV").textContent = totV + " GB";
 
-  // â”€â”€â”€ CONNECTIVITY PARAMETERS (v2: comprehensive model) â”€â”€
+  // ──── CONNECTIVITY PARAMETERS (v3: regime-aware offload model) ────
   //
   // Data path hierarchy (from fastest to slowest):
-  //   1. GPU HBM  â†’  900-4800 GB/s  (weights resident in VRAM)
-  //   2. NVLink   â†’  400-900 GB/s   (GPUâ†”GPU for Tensor Parallelism)
-  //   3. PCIe     â†’  7-57 GB/s eff. (CPUâ†”GPU for RAM offload)
-  //   4. System RAM â†’  43-304 GB/s eff. (offloaded layer weights)
+  //   1. GPU HBM  →  900-4800 GB/s  (weights resident in VRAM)
+  //   2. NVLink   →  400-900 GB/s   (GPU↔GPU for Tensor Parallelism)
+  //   3. PCIe     →  7-57 GB/s eff. (CPU↔GPU for RAM offload)
+  //   4. System RAM →  43-304 GB/s eff. (offloaded layer weights / KV cache)
   //
-  // For RAM offload, the effective transfer BW is:
-  //   BW_transfer = min(PCIe_effective, RAM_effective)
-  // where PCIe_effective = theoretical Ã— (lanes/16) Ã— Î·_PCIe
-  // and   RAM_effective  = theoretical Ã— Î·_RAM Ã— NUMA_factor
+  // Offloading Regime Model (N1-N10):
+  //   Regime A: All in VRAM → full HBM speed
+  //   Regime B: Weights in VRAM, KV Cache offloaded → full decode, TTFT + KV swap
+  //   Regime C: Weights offloaded to RAM → Bus Wall on every token
+  //   Regime D: Both offloaded → Bus Wall + KV swap
 
   var pcieGen = gpu.pcieGen || 4;
   var pcieLanes = gpu.pcieLanes || 16;
@@ -70,7 +72,7 @@ function calc() {
   var numaAware = document.getElementById("numaAware")
     ? document.getElementById("numaAware").checked
     : false;
-  var numaFactor = numaAware ? 1.0 : 0.65; // Without NUMA awareness, cross-socket access degrades BW
+  var numaFactor = numaAware ? 1.0 : 0.65;
   var ramEffective = MathEngine.calcRamEffective(ramTheoretical, RAM_EFFICIENCY, numaFactor); // GB/s practical
 
   // Transfer bandwidth for RAM offload: bottleneck is the slower of PCIe or RAM
@@ -87,19 +89,16 @@ function calc() {
     ? document.getElementById("interconnType").value
     : "nvswitch";
   var interconnBW = 0;
-  var effectiveInterconnType = interconnType; // may be overridden
+  var effectiveInterconnType = interconnType;
 
-  // Auto-detect best available interconnect for non-custom GPUs
   if (nG > 1) {
     if (interconnType === "nvswitch") {
       if (gpu.nvswitch && gpu.nvlink > 0) {
-        interconnBW = gpu.nvlink; // NVSwitch provides full NVLink BW all-to-all
+        interconnBW = gpu.nvlink;
       } else if (gpu.nvlink > 0) {
-        // GPU has NVLink but no NVSwitch â€” fall back to P2P ring
         effectiveInterconnType = "nvlink";
         interconnBW = gpu.nvlink;
       } else {
-        // No NVLink at all â€” fall back to PCIe P2P
         effectiveInterconnType = "pcie";
         interconnBW = pcieEffective;
       }
@@ -111,13 +110,11 @@ function calc() {
         interconnBW = pcieEffective;
       }
     } else if (interconnType === "pcie") {
-      interconnBW = pcieEffective; // PCIe P2P bandwidth
+      interconnBW = pcieEffective;
     } else if (interconnType === "pipeline") {
-      // Pipeline Parallelism: communication is only activation tensors between stages
-      // Much less data than all-reduce: just hidden_size Ã— batch Ã— precision
-      interconnBW = pcieEffective; // Use PCIe for activation passing
+      interconnBW = pcieEffective;
     } else {
-      interconnBW = 0; // No direct interconnect
+      interconnBW = 0;
     }
   }
 
@@ -126,7 +123,6 @@ function calc() {
   if (interconnRow) {
     interconnRow.style.display = nG > 1 ? "block" : "none";
   }
-  // Update interconnect displays
   if (nG > 1) {
     var el = document.getElementById("dInterBW");
     if (el)
@@ -151,7 +147,7 @@ function calc() {
   if (pcieLanesEl) pcieLanesEl.textContent = "x" + pcieLanes;
   if (hbmBwEl) hbmBwEl.textContent = gpu.bw.toFixed(0);
 
-  // â”€â”€â”€ MEMORY CALCULATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ──── MEMORY CALCULATIONS ────────────────────────────────────────
   var wGB = MathEngine.calcWeights(p, qW);
   var kvGB = MathEngine.calcKVCache(L, nkv, hd, ctx, bs, uS, qKV, p);
   var ovF = isFT ? (tMv === "lora" ? 0.4 : 2.0) : 0.12;
@@ -163,24 +159,40 @@ function calc() {
   var sysRam = ramOffEnabled
     ? parseFloat(document.getElementById("sysRam").value) || 0
     : 0;
-  var vramPortion = Math.min(tot, totV);
-  var ramOverflow = Math.max(0, tot - totV);
-  var ramUsable = ramOffEnabled ? Math.min(ramOverflow, sysRam) : 0;
-  var stillOom = ramOverflow > ramUsable;
 
-  // Fraction of total memory in RAM (for offload performance)
-  var ramFraction = ramUsable > 0 ? ramUsable / tot : 0;
+  // ═══════════════════════════════════════════════════════════════════
+  // N1: VRAM PRIORITY ALLOCATION MODEL
+  // ═══════════════════════════════════════════════════════════════════
+  // Weights get VRAM priority (read every token), KV gets remaining VRAM
+  var allocation = MathEngine.calcVRAMAllocation(wGB, kvGB, ovGB, totV, sysRam);
+
+  // N2: Classify the offloading regime
+  var regime = MathEngine.classifyRegime(allocation);
+  var regimeDesc = MathEngine.getRegimeDescription(regime);
+
+  // Derived allocation values
+  var vramPortion = allocation.weightsVRAM + allocation.kvVRAM + allocation.overheadVRAM;
+  var ramUsable = allocation.weightsRAM + allocation.kvRAM;
+  var stillOom = (wGB + kvGB + ovGB) > (totV + sysRam);
+
+  // RAM fractions for performance model
+  var weightRamFraction = wGB > 0 ? allocation.weightsRAM / wGB : 0;
+  var kvRamFraction = kvGB > 0 ? allocation.kvRAM / kvGB : 0;
 
   // Update RAM met display
   var ramMet = document.getElementById("ramMet");
-  var legRam = document.getElementById("legRam");
+  var legRamWts = document.getElementById("legRamWts");
+  var legRamKv = document.getElementById("legRamKv");
   if (ramUsable > 0) {
-    ramMet.style.display = "";
-    legRam.style.display = "";
-    document.getElementById("rRam").textContent = fmt(ramUsable);
+    if (ramMet) ramMet.style.display = "";
+    var rRamEl = document.getElementById("rRam");
+    if (rRamEl) rRamEl.textContent = fmt(ramUsable);
+    if (legRamWts) legRamWts.style.display = allocation.weightsRAM > 0 ? "" : "none";
+    if (legRamKv) legRamKv.style.display = allocation.kvRAM > 0 ? "" : "none";
   } else {
-    ramMet.style.display = "none";
-    legRam.style.display = "none";
+    if (ramMet) ramMet.style.display = "none";
+    if (legRamWts) legRamWts.style.display = "none";
+    if (legRamKv) legRamKv.style.display = "none";
   }
 
   // Display memory metrics
@@ -200,11 +212,14 @@ function calc() {
   var pctOv = Math.min(100, (ovGB / totV) * 100);
   var totalPct = pctW + pctKV + pctOv;
 
-  document.getElementById("segWts").style.width = pctW + "%";
-  document.getElementById("segKv").style.width = pctKV + "%";
-  document.getElementById("segOv").style.width = pctOv + "%";
-  document.getElementById("barInner").style.width =
-    Math.min(100, totalPct) + "%";
+  var segWts = document.getElementById("segWts");
+  var segKv = document.getElementById("segKv");
+  var segOv = document.getElementById("segOv");
+  var barInner = document.getElementById("barInner");
+  if (segWts) segWts.style.width = pctW + "%";
+  if (segKv) segKv.style.width = pctKV + "%";
+  if (segOv) segOv.style.width = pctOv + "%";
+  if (barInner) barInner.style.width = Math.min(100, totalPct) + "%";
 
   var barWrap = document.getElementById("barWrap");
   var barWrapRam = document.getElementById("barWrapRam");
@@ -214,10 +229,13 @@ function calc() {
     if (barWrapRam) barWrapRam.style.flex = sysRam;
     
     var pctRam = Math.min(100, (ramUsable / sysRam) * 100);
-    var segRam = document.getElementById("segRam");
-    if (segRam) segRam.style.width = "100%";
     var barInnerRam = document.getElementById("barInnerRam");
     if (barInnerRam) barInnerRam.style.width = pctRam + "%";
+    
+    var segRamWts = document.getElementById("segRamWts");
+    var segRamKv = document.getElementById("segRamKv");
+    if (segRamWts) segRamWts.style.width = (allocation.weightsRAM / ramUsable * 100) + "%";
+    if (segRamKv) segRamKv.style.width = (allocation.kvRAM / ramUsable * 100) + "%";
   } else {
     if (barWrapRam) barWrapRam.style.display = "none";
     if (barWrap) barWrap.style.flex = "1";
@@ -225,19 +243,22 @@ function calc() {
 
   // Labels
   if (ramUsable > 0) {
+    var ramBreakdown = "";
+    if (allocation.weightsRAM > 0) ramBreakdown += fmt(allocation.weightsRAM) + " weights";
+    if (allocation.weightsRAM > 0 && allocation.kvRAM > 0) ramBreakdown += " + ";
+    if (allocation.kvRAM > 0) ramBreakdown += fmt(allocation.kvRAM) + " KV cache";
     document.getElementById("usedL").textContent =
       fmt(tot) +
       " required (" +
       fmt(vramPortion) +
       " VRAM + " +
-      fmt(ramUsable) +
-      " RAM)";
+      ramBreakdown + " RAM)";
   } else {
     document.getElementById("usedL").textContent = fmt(tot) + " required";
   }
   document.getElementById("totL").textContent = fmt(totV) + " available";
 
-  // Badge
+  // Badge — show regime when offloading is active
   var bdg = document.getElementById("bdg");
   if (stillOom && !ramOffEnabled) {
     bdg.textContent = "OOM";
@@ -245,6 +266,15 @@ function calc() {
   } else if (stillOom && ramOffEnabled) {
     bdg.textContent = "OOM (even with RAM)";
     bdg.className = "bdg er";
+  } else if (regime === "B") {
+    bdg.textContent = "REGIME B — KV OFFLOAD";
+    bdg.className = "bdg amber-bdg";
+  } else if (regime === "C") {
+    bdg.textContent = "REGIME C — WEIGHT OFFLOAD";
+    bdg.className = "bdg amber-bdg";
+  } else if (regime === "D") {
+    bdg.textContent = "REGIME D — FULL OFFLOAD";
+    bdg.className = "bdg amber-bdg";
   } else if (ramUsable > 0) {
     bdg.textContent = "RAM OFFLOAD";
     bdg.className = "bdg amber-bdg";
@@ -256,20 +286,26 @@ function calc() {
     bdg.className = "bdg wa";
   }
 
-  // Breakdown rows
+  // Breakdown rows — show allocation breakdown
   var rows = [
     ["Model weights", wGB],
     [isFT ? "Gradient memory" : "KV cache", kvGB],
     [isFT ? "Optimizer state" : "Overhead", ovGB],
   ];
-  if (ramUsable > 0) {
-    rows.push(["RAM offloaded", ramUsable]);
+  if (allocation.weightsRAM > 0) {
+    rows.push(["  Weights in RAM", allocation.weightsRAM]);
+  }
+  if (allocation.kvRAM > 0) {
+    rows.push(["  KV Cache in RAM", allocation.kvRAM]);
   }
   rows.push(["Total", tot]);
   document.getElementById("bdDiv").innerHTML = rows
     .map(function (r) {
+      var isRAM = r[0].indexOf("in RAM") >= 0;
+      var isIndent = r[0].indexOf("  ") === 0;
       var cls =
-        r[0] === "RAM offloaded" ? ' style="color:var(--amber)"' : "";
+        isRAM ? ' style="color:var(--amber)"' :
+        isIndent ? ' style="padding-left:1em;color:var(--amber)"' : "";
       return (
         '<div class="bdr"' +
         cls +
@@ -289,7 +325,6 @@ function calc() {
 
   // Build formulas using templates
   var formulas = [];
-  var fmtVal = function(val, fixed) { return fixed !== undefined ? val.toFixed(fixed) : val; };
   
   formulas.push({
     label: "Weights",
@@ -365,6 +400,31 @@ function calc() {
     });
   }
 
+  // N1: Show VRAM allocation formula when offloading
+  if (regime !== "A") {
+    formulas.push({
+      label: "Regime " + regime,
+      tex: RESULT_TEMPLATES.regime_class
+        .replace("{regime}", regime)
+        .replace("{wVRAM}", fmt(allocation.weightsVRAM))
+        .replace("{wRAM}", fmt(allocation.weightsRAM))
+        .replace("{kvVRAM}", fmt(allocation.kvVRAM))
+        .replace("{kvRAM}", fmt(allocation.kvRAM))
+    });
+
+    // N4: Show KV swap latency for regimes B and D
+    if (regime === "B" || regime === "D") {
+      var kvSwapTimeS = MathEngine.calcKVSwapLatency(allocation.kvRAM, transferBW);
+      formulas.push({
+        label: "KV Swap",
+        tex: RESULT_TEMPLATES.kv_swap
+          .replace("{kvRAM}", fmt(allocation.kvRAM))
+          .replace("{transferBW}", transferBW.toFixed(1))
+          .replace("{kvSwapMs}", (kvSwapTimeS * 1000).toFixed(1))
+      });
+    }
+  }
+
   var fmlContent = document.getElementById("fmlContent");
   if (fmlContent && typeof katex !== "undefined") {
     fmlContent.innerHTML = formulas
@@ -397,39 +457,31 @@ function calc() {
       .join("\n");
   }
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // PERFORMANCE ESTIMATES (v2: Connectivity-Aware Roofline Model)
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════════════════════════════════
+  // PERFORMANCE ESTIMATES (v3: Regime-Aware Offload Model)
+  // ═══════════════════════════════════════════════════════════════════
   //
-  // The Roofline Model determines whether inference is compute-bound
-  // or bandwidth-bound by comparing arithmetic intensity to the GPU's
-  // ridge point.
+  // The key distinction from the previous model:
+  //   - Weight offloading → Bus Wall penalty on EVERY decode token
+  //   - KV Cache offloading → Only impacts TTFT (swap-in latency)
   //
-  // Arithmetic Intensity = FLOPs / Bytes_accessed = 2/b for decode
-  //   Q4:  4 FLOP/byte  (deeply bandwidth-bound)
-  //   Q8:  2 FLOP/byte  (deeply bandwidth-bound)
-  //   FP16: 1 FLOP/byte (deeply bandwidth-bound)
-  //
-  // Ridge point (H100): ~120 FLOP/byte â†’ decode is always bandwidth-bound
-  //
-  // Decode model: T_decode = W_vram/BW_HBM + W_ram/BW_transfer
-  //   where W_vram = weights in VRAM, W_ram = weights in RAM
-  //
-  // Multi-GPU model: TP splits weights, PP splits layers
-  //   TP: T = 1/N * W/BW_HBM + L * all_reduce / BW_interconnect
-  //   PP: T = sum(stage_times) + bubble_overhead
+  // Regime A: TPS = BW_HBM / (P_active × b) [full speed]
+  // Regime B: TPS = same as A [weights still in VRAM!]
+  //           TTFT_B = TTFT_A + T_kv_swap
+  // Regime C: TPS = 1 / (W_VRAM/BW_HBM + W_RAM/BW_transfer) [Bus Wall]
+  //           TTFT_C = max(compute, weight_load)
+  // Regime D: TPS = same as C [Bus Wall from weight offload]
+  //           TTFT_D = TTFT_C + T_kv_swap
   if (!isFT) {
     var bw = gpu.bw || 900;
     var tflops = gpu.tflops || 0;
     var tdp = gpu.tdp || 300;
 
-    // â”€â”€â”€ 1. DECODE SPEED (bandwidth-bound) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Each decode step reads all active weights once from HBM
-    // tok/s = BW_HBM / (P_active * bytes_per_param)
+    // ──── 1. DECODE SPEED — regime-aware ────────────────────────────
     var wBytes = act * qW; // Total weight bytes in GB
-    var decodeTps = MathEngine.calcDecodeSpeed(bw, wBytes); // tokens/sec (single GPU, no offload)
+    var decodeTps = MathEngine.calcDecodeSpeed(bw, wBytes); // baseline single-GPU
 
-    // â”€â”€â”€ 2. MULTI-GPU PARALLELISM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ──── 2. MULTI-GPU PARALLELISM ──────────────────────────────────
     var tpEfficiency = 1.0;
     var tpNote = "";
     var isPipelineParallel = false;
@@ -439,23 +491,15 @@ function calc() {
         effectiveInterconnType === "pipeline" ||
         interconnType === "pipeline"
       ) {
-        // â”€â”€â”€ PIPELINE PARALLELISM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // PIPELINE PARALLELISM
         isPipelineParallel = true;
-        // PP: layers split across GPUs, each GPU processes its stage sequentially
-        // Pipeline bubble: (N-1) micro-batches of idle time per forward pass
-        // With 1 micro-batch: bubble fraction = (N-1)/N
-        // With more micro-batches, bubble decreases: (N-1)/(N+M-1) for M micro-batches
-        // For single-user inference with batch=1: only 1 micro-batch possible
         var bubbleFraction = (nG - 1) / nG;
-        // Communication: just activation tensors (hidden_size Ã— precision)
         var effectiveH = h || hd * nh || 4096;
-        var actSize = effectiveH * qW; // activation tensor size in bytes
-        var commTime = (actSize / (interconnBW * 1e9)) * 1e6; // us per stage boundary
+        var actSize = effectiveH * qW;
+        var commTime = (actSize / (interconnBW * 1e9)) * 1e6;
         var commLatency = INTERCONN_LATENCY["pcie"] || 40e-6;
-        var tCommPP = (nG - 1) * (commTime + commLatency * 1e6); // us total communication
-        // Each stage still reads its fraction of weights from HBM
-        // Stage time = (P_active * qW / N) / BW_HBM
-        var tStage = wBytes / nG / bw; // seconds per stage
+        var tCommPP = (nG - 1) * (commTime + commLatency * 1e6);
+        var tStage = wBytes / nG / bw;
         var tBubble = tStage * bubbleFraction;
         tpEfficiency = tStage / (tStage + tBubble);
         decodeTps = (1 / tStage) * tpEfficiency;
@@ -467,51 +511,35 @@ function calc() {
           (tpEfficiency * 100).toFixed(0) +
           "%. Best for PCIe-only setups or cross-node.";
       } else {
-        // â”€â”€â”€ TENSOR PARALLELISM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        // With TP, weights are split across N GPUs
-        // Each GPU reads 1/N of weights: T_compute = wBytes / (N * BW_HBM)
-        var tCompute = (wBytes * 1e9) / (nG * bw * 1e9); // seconds per token (compute)
-
-        // All-reduce communication per layer
+        // TENSOR PARALLELISM
+        var tCompute = (wBytes * 1e9) / (nG * bw * 1e9);
         var effectiveH = h || hd * nh || 4096;
-        var msgSize = effectiveH * 2; // bytes per all-reduce message (FP16)
+        var msgSize = effectiveH * 2;
 
-        // All-reduce depends on topology:
-        // Ring all-reduce (NVLink P2P / PCIe P2P):
-        //   Bandwidth: 2 * (N-1)/N * msg_size / BW_interconnect
-        // NVSwitch all-reduce:
-        //   Bandwidth: 2 * msg_size / BW_interconnect (all-to-all at full speed)
         var allReduceBandwidth;
         if (effectiveInterconnType === "nvswitch") {
-          // NVSwitch: reduce-scatter + all-gather, each in 1 step
-          allReduceBandwidth = (2 * msgSize) / (interconnBW * 1e9); // seconds
+          allReduceBandwidth = (2 * msgSize) / (interconnBW * 1e9);
         } else {
-          // Ring all-reduce: 2 * (N-1)/N factor
           allReduceBandwidth =
-            (2 * ((nG - 1) / nG) * msgSize) / (interconnBW * 1e9); // seconds
+            (2 * ((nG - 1) / nG) * msgSize) / (interconnBW * 1e9);
         }
 
-        // Latency per all-reduce operation
         var allReduceLatency =
           INTERCONN_LATENCY[effectiveInterconnType] || 10e-6;
 
         var tComm = L * (allReduceBandwidth + allReduceLatency);
 
-        // All-reduce latency per layer (for display)
-        var arLatPerLayer = (allReduceBandwidth + allReduceLatency) * 1e6; // microseconds
+        var arLatPerLayer = (allReduceBandwidth + allReduceLatency) * 1e6;
 
         tpEfficiency = tCompute / (tCompute + tComm);
 
-        // Update TP efficiency display
         var tpEffEl = document.getElementById("dTPEff");
         if (tpEffEl)
           tpEffEl.textContent = (tpEfficiency * 100).toFixed(0) + "%";
 
-        // Update all-reduce latency display
         var arLatEl = document.getElementById("dARLat");
         if (arLatEl) arLatEl.textContent = arLatPerLayer.toFixed(1);
 
-        // Apply TP speedup: N GPUs Ã— efficiency
         decodeTps = ((bw * nG) / wBytes) * tpEfficiency;
 
         if (
@@ -521,7 +549,7 @@ function calc() {
           tpNote =
             "No direct GPU interconnect \u2014 Tensor Parallelism not viable. Use Pipeline Parallelism or separate instances instead.";
           tpEfficiency = 0;
-          decodeTps = bw / wBytes; // Fall back to single-GPU speed
+          decodeTps = bw / wBytes;
         } else if (effectiveInterconnType === "pcie") {
           tpNote =
             nG +
@@ -562,9 +590,7 @@ function calc() {
       if (arLatEl) arLatEl.textContent = "N/A";
     }
 
-    // â”€â”€â”€ 3. PREFILL SPEED (compute-bound) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Each token requires 2 * P_active FLOPs (multiply + accumulate)
-    // Arithmetic intensity for prefill is high (batched matmul) â†’ compute-bound
+    // ──── 3. PREFILL SPEED (compute-bound) ──────────────────────────
     var prefillTps;
     if (tflops > 0) {
       prefillTps = MathEngine.calcPrefillSpeed(tflops, act, (nG > 1 && !isPipelineParallel) ? nG * tpEfficiency : tpEfficiency);
@@ -572,119 +598,200 @@ function calc() {
       prefillTps = decodeTps * 4;
     }
 
-    // â”€â”€â”€ 4. TTFT (time to first token) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // TTFT = time to read weights + time to process C tokens
-    // For bandwidth-bound estimate: TTFT = P_active * qW / BW_effective
-    var ttft = (wBytes / bw) * 1000; // ms, single-GPU bandwidth-bound
+    // ──── 4. TTFT baseline ──────────────────────────────────────────
+    var ttftBase = (wBytes / bw) * 1000; // ms, single-GPU bandwidth-bound
     if (nG > 1 && interconnBW > 0 && !isPipelineParallel) {
-      ttft = ((wBytes / (bw * nG)) * 1000) / tpEfficiency; // ms with TP
+      ttftBase = ((wBytes / (bw * nG)) * 1000) / tpEfficiency;
     } else if (nG > 1 && isPipelineParallel) {
-      ttft = ((wBytes / bw) * 1000) / tpEfficiency; // PP: each stage reads 1/N but sequentially
+      ttftBase = ((wBytes / bw) * 1000) / tpEfficiency;
     }
 
-    // â”€â”€â”€ 5. APPLY RAM OFFLOAD DEGRADATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Real model: T_decode = W_vram/BW_HBM + W_ram/BW_transfer
-    // This is more accurate than a simple degradation factor because
-    // it models the two data paths separately:
-    //   - VRAM-resident layers: read from HBM at full GPU bandwidth
-    //   - RAM-offloaded layers: read from RAM via PCIe at transfer bandwidth
+    // ═════════════════════════════════════════════════════════════════
+    // 5. APPLY REGIME-AWARE PERFORMANCE MODEL (N3-N7)
+    // ═════════════════════════════════════════════════════════════════
     var ramPerfNote = document.getElementById("ramPerfNote");
-    if (ramUsable > 0 && ramFraction > 0) {
-      ramPerfNote.style.display = "block";
-      var wVramGB = (1 - ramFraction) * wBytes; // weights in VRAM (GB)
-      var wRamGB = ramFraction * wBytes; // weights in RAM (GB)
+    var ttft = ttftBase;
+    var kvSwapTimeS = 0;
+    var kvSwapTimeMs = 0;
 
-      // Effective BW for multi-GPU VRAM portion
+    // N4: Compute KV swap latency (for regimes B and D)
+    if (regime === "B" || regime === "D") {
+      kvSwapTimeS = MathEngine.calcKVSwapLatency(allocation.kvRAM, transferBW);
+      kvSwapTimeMs = kvSwapTimeS * 1000;
+    }
+
+    if (regime === "A") {
+      // ──── REGIME A: All in VRAM ────────────────────────────────────
+      // Full performance, no penalties
+      if (ramPerfNote) {
+        ramPerfNote.style.display = "none";
+        ramPerfNote.innerHTML = "";
+      }
+    } else if (regime === "B") {
+      // ──── REGIME B: Weights in VRAM, KV offloaded ──────────────────
+      // KEY INSIGHT: Decode speed is UNCHANGED because weights are in VRAM!
+      // Only TTFT is impacted by KV swap-in latency
+      // N3: TPS_B = TPS_A (full decode speed preserved)
+
+      // TTFT gets the swap penalty
+      ttft = ttftBase + kvSwapTimeMs;
+
+      if (ramPerfNote) {
+        ramPerfNote.style.display = "block";
+        ramPerfNote.innerHTML =
+          "<strong>Regime B — KV Cache Offload:</strong> " +
+          "All weights in VRAM → decode at <strong>full HBM speed</strong> (" +
+          decodeTps.toFixed(1) +
+          " tok/s). KV Cache partially in RAM: " +
+          fmt(allocation.kvVRAM) +
+          " GB VRAM + " +
+          fmt(allocation.kvRAM) +
+          " GB RAM. " +
+          "KV swap-in adds <strong>" +
+          kvSwapTimeMs.toFixed(1) +
+          " ms</strong> to TTFT (" +
+          fmt(allocation.kvRAM) +
+          " GB / " +
+          transferBW.toFixed(1) +
+          " GB/s). " +
+          "Bottleneck: " +
+          transferBottleneck +
+          ". This is <strong>much better</strong> than weight offloading (Regime C/D).";
+      }
+    } else if (regime === "C") {
+      // ──── REGIME C: Weights offloaded to RAM ───────────────────────
+      // Bus Wall penalty on every decode token
+      // N6: TTFT_C = max(compute_time, weight_load_time)
+
       var effectiveBwHBM = nG > 1 ? bw * nG * tpEfficiency : bw;
+      var wVramGB = allocation.weightsVRAM;
+      var wRamGB = allocation.weightsRAM;
 
-      // Decode time per token = time for VRAM portion + time for RAM portion
-      // This is the key formula that properly models the mixed bandwidth:
-      var tVramDecode = wVramGB / effectiveBwHBM; // seconds for VRAM-resident weights
-      var tRamDecode = wRamGB / transferBW; // seconds for RAM-offloaded weights
-      var tDecodeTotal = tVramDecode + tRamDecode; // total seconds per token
+      var tVramDecode = wVramGB / effectiveBwHBM;
+      var tRamDecode = wRamGB / transferBW;
+      var tDecodeTotal = tVramDecode + tRamDecode;
 
       decodeTps = 1 / tDecodeTotal;
 
-      // Prefill also affected by RAM offload
+      // Prefill also affected
       if (tflops > 0) {
-        // Prefill is compute-bound for VRAM layers, bandwidth-bound for RAM layers
-        // The RAM-offloaded layers can't use GPU compute effectively
-        // because they're waiting for data to arrive via PCIe
         var prefillDegradation =
-          1 / (1 - ramFraction + ramFraction * busWallRatio);
+          1 / (1 - weightRamFraction + weightRamFraction * busWallRatio);
         prefillTps = prefillTps * (1 / prefillDegradation);
       }
 
-      // TTFT: reading prompt also needs RAM-offloaded weights
-      // Each token of the prompt needs all weights, not just active ones
-      ttft = tDecodeTotal * ctx * 1000; // approximate: each prompt token also needs weight reading
+      // TTFT: weight loading dominates
+      var weightLoadTimeMs = (wRamGB / transferBW) * 1000;
+      ttft = Math.max(ttftBase, weightLoadTimeMs);
 
-      ramPerfNote.innerHTML =
-        "<strong>Bus Wall active:</strong> " +
-        (ramFraction * 100).toFixed(0) +
-        "% of weights in RAM, " +
-        "running " +
-        busWallRatio.toFixed(0) +
-        "\u00D7 slower than HBM. " +
-        "Bottleneck: " +
-        transferBottleneck +
-        " (" +
-        transferBW.toFixed(1) +
-        " GB/s effective vs " +
-        bw +
-        " GB/s HBM). " +
-        "RAM layers: " +
-        tRamDecode.toFixed(4) +
-        "s/tok, VRAM layers: " +
-        tVramDecode.toFixed(6) +
-        "s/tok. " +
-        "PCIe: " +
-        pcieEffective.toFixed(1) +
-        " GB/s (Gen" +
-        pcieGen +
-        " x" +
-        pcieLanes +
-        " \u00D7 " +
-        PCIE_EFFICIENCY +
-        "), " +
-        "RAM: " +
-        ramEffective.toFixed(1) +
-        " GB/s (\u03B7=" +
-        RAM_EFFICIENCY +
-        (numaAware ? ", NUMA-aware" : ", no NUMA \u00D70.65") +
-        ").";
-    } else {
-      ramPerfNote.style.display = "none";
-      ramPerfNote.innerHTML = "";
+      if (ramPerfNote) {
+        ramPerfNote.style.display = "block";
+        ramPerfNote.innerHTML =
+          "<strong>Regime C — Weight Offload (Bus Wall):</strong> " +
+          (weightRamFraction * 100).toFixed(0) +
+          "% of weights in RAM, running " +
+          busWallRatio.toFixed(0) +
+          "\u00D7 slower than HBM on every token. " +
+          "Bottleneck: " +
+          transferBottleneck +
+          " (" +
+          transferBW.toFixed(1) +
+          " GB/s effective vs " +
+          bw +
+          " GB/s HBM). " +
+          "RAM layers: " +
+          tRamDecode.toFixed(4) +
+          "s/tok, VRAM layers: " +
+          tVramDecode.toFixed(6) +
+          "s/tok. " +
+          "<strong>Recommendation:</strong> Quantize weights more aggressively to fit in VRAM — this avoids the Bus Wall entirely.";
+      }
+    } else if (regime === "D") {
+      // ──── REGIME D: Both weights and KV in RAM ─────────────────────
+      // Bus Wall + KV swap penalty (worst case)
+
+      var effectiveBwHBM = nG > 1 ? bw * nG * tpEfficiency : bw;
+      var wVramGB = allocation.weightsVRAM;
+      var wRamGB = allocation.weightsRAM;
+
+      var tVramDecode = wVramGB / effectiveBwHBM;
+      var tRamDecode = wRamGB / transferBW;
+      var tDecodeTotal = tVramDecode + tRamDecode;
+
+      decodeTps = 1 / tDecodeTotal;
+
+      // Prefill also affected
+      if (tflops > 0) {
+        var prefillDegradation =
+          1 / (1 - weightRamFraction + weightRamFraction * busWallRatio);
+        prefillTps = prefillTps * (1 / prefillDegradation);
+      }
+
+      // TTFT: weight loading + KV swap
+      var weightLoadTimeMs = (wRamGB / transferBW) * 1000;
+      ttft = Math.max(ttftBase, weightLoadTimeMs) + kvSwapTimeMs;
+
+      if (ramPerfNote) {
+        ramPerfNote.style.display = "block";
+        ramPerfNote.innerHTML =
+          "<strong>Regime D — Full Offload (Bus Wall + KV Swap):</strong> " +
+          (weightRamFraction * 100).toFixed(0) +
+          "% of weights in RAM (" +
+          busWallRatio.toFixed(0) +
+          "\u00D7 slower) + KV swap (" +
+          kvSwapTimeMs.toFixed(1) +
+          " ms). " +
+          "This is the worst case. " +
+          "<strong>Recommendation:</strong> Use more GPUs, quantize weights, or reduce context/users to get to Regime A or B.";
+      }
     }
 
-    // â”€â”€â”€ 6. DERIVED METRICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ──── 6. CONCURRENCY (N8-N9) ────────────────────────────────────
+    // Calculate how many users can be served simultaneously
+    var kvPerUser = uS > 0 ? kvGB / uS : kvGB;  // KV per single user
+    var kvVRAMMax = allocation.kvVRAM;  // VRAM available for KV
+    var ramForKV = allocation.kvRAM;     // RAM available for KV
+    var concurrency = MathEngine.calcConcurrencyLimits(kvVRAMMax, kvPerUser, ramForKV);
+
+    // ──── 7. DERIVED METRICS ────────────────────────────────────────
     var latPerTok = 1000 / decodeTps;
     var time100 = ttft / 1000 + 100 / decodeTps;
     var time1000 = ttft / 1000 + 1000 / decodeTps;
-    var throughput = decodeTps * uS;
+
+    // N9: Effective throughput accounts for KV swap overhead
+    var throughput;
+    if (regime === "B" || regime === "D") {
+      throughput = MathEngine.calcEffectiveThroughput(
+        decodeTps, concurrency.uActive, concurrency.uSwapped,
+        kvSwapTimeS, 256  // assume ~256 avg tokens per context for swap calculation
+      );
+    } else {
+      throughput = decodeTps * uS;
+    }
 
     // HBM bandwidth actually used per decode step
-    var bwUsed = wBytes * decodeTps; // GB/s consumed by weight reading
+    var bwUsed = wBytes * decodeTps;
     if (nG > 1 && !isPipelineParallel)
       bwUsed = bwUsed / (nG * tpEfficiency || 1);
 
-    // Arithmetic intensity (FLOP/byte) for roofline analysis
-    var arithIntensity = 2 / qW; // FLOPs per byte for decode
+    // Arithmetic intensity
+    var arithIntensity = 2 / qW;
 
-    // Bottleneck analysis with roofline context
+    // Bottleneck analysis with regime context
     var bottleneckLabel = "HBM bandwidth";
-    if (ramUsable > 0) {
+    if (regime === "C" || regime === "D") {
       bottleneckLabel =
         transferBottleneck +
         "+RAM (" +
         busWallRatio.toFixed(0) +
-        "\u00D7 wall)";
+        "\u00D7 Bus Wall)";
+    } else if (regime === "B") {
+      bottleneckLabel = "HBM bandwidth (full speed)";
     } else if (nG > 1 && effectiveInterconnType === "pcie") {
       bottleneckLabel = "PCIe interconnect";
     }
 
-    // â”€â”€â”€ 7. DISPLAY RESULTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ──── 8. DISPLAY RESULTS ────────────────────────────────────────
     document.getElementById("pPrefill").textContent =
       prefillTps >= 1000
         ? (prefillTps / 1000).toFixed(1) + "k"
@@ -693,20 +800,10 @@ function calc() {
       decodeTps >= 1000
         ? (decodeTps / 1000).toFixed(1) + "k"
         : decodeTps.toFixed(1);
-    document.getElementById("pLat").textContent =
-      latPerTok >= 1000
-        ? (latPerTok / 1000).toFixed(1) + "s"
-        : latPerTok.toFixed(1);
-    document.getElementById("pTTFT").textContent =
-      ttft >= 1000 ? (ttft / 1000).toFixed(1) + "s" : ttft.toFixed(0);
-    document.getElementById("p100").textContent =
-      time100 >= 60
-        ? (time100 / 60).toFixed(1) + "m"
-        : time100.toFixed(1);
-    document.getElementById("p1000").textContent =
-      time1000 >= 60
-        ? (time1000 / 60).toFixed(1) + "m"
-        : time1000.toFixed(1);
+    document.getElementById("pLat").textContent = latPerTok.toFixed(1);
+    document.getElementById("pTTFT").textContent = ttft.toFixed(0);
+    document.getElementById("p100").textContent = time100.toFixed(1);
+    document.getElementById("p1000").textContent = time1000.toFixed(1);
     document.getElementById("pThr").textContent =
       throughput >= 1000
         ? (throughput / 1000).toFixed(1) + "k"
@@ -716,6 +813,39 @@ function calc() {
     document.getElementById("pArithInt").textContent =
       arithIntensity.toFixed(1);
     document.getElementById("perfCard").style.display = "block";
+
+    // Regime badge in performance section
+    var regimeEl = document.getElementById("pRegime");
+    if (regimeEl) {
+      regimeEl.textContent = "Regime " + regime;
+      regimeEl.className = regime === "A" ? "bdg ok" :
+                           regime === "B" ? "bdg amber-bdg" :
+                           "bdg er";
+      regimeEl.style.display = "inline-block";
+    }
+
+    // Concurrency display
+    var concEl = document.getElementById("pConcurrency");
+    if (concEl) {
+      if (regime === "B" || regime === "D") {
+        concEl.textContent = concurrency.uActive + " active + " + concurrency.uSwapped + " swapped";
+        concEl.style.display = "";
+      } else {
+        concEl.textContent = concurrency.uActive + " active";
+        concEl.style.display = "";
+      }
+    }
+
+    // KV swap display
+    var kvSwapEl = document.getElementById("pKVSwap");
+    if (kvSwapEl) {
+      if (regime === "B" || regime === "D") {
+        kvSwapEl.textContent = kvSwapTimeMs.toFixed(1) + " ms";
+        kvSwapEl.style.display = "";
+      } else {
+        kvSwapEl.style.display = "none";
+      }
+    }
 
     // TP note
     var tpPerfNote = document.getElementById("tpPerfNote");
@@ -728,7 +858,7 @@ function calc() {
       }
     }
 
-    // â”€â”€â”€ 8. POWER & COST CALCULATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ──── 9. POWER & COST CALCULATIONS ──────────────────────────────
     var utilPct =
       parseFloat(document.getElementById("pUtil").value) / 100;
     var elecCost = parseFloat(document.getElementById("pElec").value);

@@ -220,7 +220,16 @@ select:focus {
 .bar-ov {
   background: #94a3b8;
 }
-.bar-ram {
+.bar-ram-wts {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--p),
+    var(--p) 4px,
+    #990000 4px,
+    #990000 8px
+  );
+}
+.bar-ram-kv {
   background: repeating-linear-gradient(
     45deg,
     #f59e0b,

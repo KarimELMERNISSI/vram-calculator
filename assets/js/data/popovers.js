@@ -198,5 +198,69 @@ var POPDEFS = {
     explain: "Pipeline Parallelism splits model layers across GPUs sequentially. Each GPU processes a contiguous group of layers and passes activations to the next GPU. Unlike Tensor Parallelism, PP requires minimal communication (only activation tensors, not all-reduce). However, it introduces pipeline bubbles \u2014 idle time where GPUs wait for preceding stages. PP is preferred when NVLink is unavailable or for cross-node deployment.",
     refs: "2-GPU PP, 70B Q4: ~90% efficiency (small bubble). 4-GPU PP: ~75% efficiency. Cross-node PP: ~70% efficiency. Use PP over PCIe, TP over NVLink.",
   },
+
+  // ═══════════════════════════════════════════════════════════
+  // N1-N10: OFFLOADING REGIME MODEL POPOVERS
+  // ═══════════════════════════════════════════════════════════
+
+  offloading_regime: {
+    title: "Offloading Regime (A / B / C / D)",
+    explain: "The offloading regime classifies how memory is distributed between VRAM and RAM. This critically affects performance because weight offloading causes a Bus Wall penalty on every decode token, while KV Cache offloading only adds a one-time swap penalty to TTFT. Regime A = all VRAM (best), B = weights in VRAM + KV in RAM (good decode speed), C = weights in RAM (Bus Wall on every token), D = both in RAM (worst).",
+    refs: "Regime B is the sweet spot for multi-user serving: full decode speed with KV swap. Regime C/D should be avoided \u2014 quantize weights more aggressively instead of offloading to RAM.",
+  },
+
+  vram_priority: {
+    title: "VRAM Priority Allocation (N1)",
+    explain: "When memory is scarce, VRAM is allocated with priority: (1) Overhead/CUDA kernels must be in VRAM, (2) Model weights get VRAM next (they are read on every decode token), (3) KV cache gets whatever VRAM remains. This priority order is crucial because weight offloading causes a Bus Wall penalty on every token, while KV offloading only impacts TTFT.",
+    refs: "If weights fit in VRAM (Regime B), decode runs at full HBM speed even with KV cache in RAM. This is dramatically better than weight offloading (Regime C/D).",
+  },
+
+  regime_b_tps: {
+    title: "Regime B: Decode Speed (N3)",
+    explain: "In Regime B, all model weights reside in VRAM while KV cache overflows to RAM. The key insight is that decode speed remains identical to Regime A (full VRAM), because each decode token only reads weights from HBM. The KV cache is only needed at the start of generation (swap-in) and during attention computation, which can overlap with weight loading.",
+    refs: "TPS_B = TPS_A. This makes Regime B highly attractive for multi-user serving: you get full decode speed with only a TTFT penalty for KV swap-in.",
+  },
+
+  kv_swap_latency: {
+    title: "KV Cache Swap-In Latency (N4)",
+    explain: "When a user's KV cache is stored in RAM, it must be swapped into VRAM before generation can begin. This is a one-time cost per context switch: T_kv_swap = V_kv_RAM / BW_transfer. The swap latency adds directly to TTFT but does not affect decode speed. With PCIe Gen5 x16 (~57 GB/s effective) and 10 GB of KV in RAM, swap takes ~175 ms.",
+    refs: "PCIe Gen4 x16: ~28 GB/s. PCIe Gen5 x16: ~57 GB/s. DDR5 8-ch: ~304 GB/s. Typical swap: 50-500 ms depending on KV size and bandwidth.",
+  },
+
+  regime_b_ttft: {
+    title: "Regime B: TTFT with KV Swap (N5)",
+    explain: "In Regime B, the Time to First Token includes the standard prefill time plus the one-time KV swap-in latency. TTFT_B = TTFT_A + T_kv_swap. This means the first token for a user with offloaded KV cache is delayed, but all subsequent tokens generate at full decode speed.",
+    refs: "For interactive chat, a 100-300ms swap delay is often acceptable since the user already waited for the prompt to be sent. For batch processing, swap cost is amortized over many tokens.",
+  },
+
+  regime_c_ttft: {
+    title: "Regime C: TTFT with Weight Offload (N6)",
+    explain: "In Regime C, some model weights are stored in RAM. During prefill, these weights must be loaded over PCIe before computation can proceed. TTFT_C = max(T_compute, T_weight_load). The weight loading time dominates because PCIe is 30-100x slower than HBM. This is why weight offloading is so much worse than KV offloading.",
+    refs: "A 70B Q4 model with 50% weights in RAM at 28 GB/s PCIe: weight load takes ~625ms per prompt token. This makes Regime C impractical for real-time serving.",
+  },
+
+  regime_d_ttft: {
+    title: "Regime D: TTFT with Full Offload (N7)",
+    explain: "Regime D combines the worst of both worlds: weight offloading (Bus Wall on every token) and KV cache offloading (swap penalty). TTFT_D = max(T_compute, T_weight_load) + T_kv_swap. Both the weight loading and KV swap penalties apply. Avoid this regime by quantizing weights more aggressively or using more GPUs.",
+    refs: "This regime should be considered a last resort. The combined penalties make both TTFT and decode speed severely degraded. Quantize to Q4 or lower to avoid.",
+  },
+
+  concurrency_limits: {
+    title: "Concurrency Limits (N8)",
+    explain: "When KV cache is partially offloaded to RAM, the number of concurrent users splits into two groups: U_active (users whose KV fits in VRAM, full-speed decode) and U_swapped (users whose KV is in RAM, requiring swap on context switch). U_active = floor(V_kv_VRAM / V_kv_per_user), U_swapped = floor(V_kv_RAM / V_kv_per_user). Active users get lower latency; swapped users pay the swap penalty.",
+    refs: "8-user serving with 4 in VRAM + 4 in RAM: 4 users at full speed, 4 users with ~200ms swap delay. This is often acceptable for chat applications.",
+  },
+
+  effective_throughput: {
+    title: "Effective Throughput with Swapping (N9)",
+    explain: "Total throughput with KV swapping accounts for the time spent swapping vs generating: TPS_eff = U_active \u00d7 TPS + U_swapped \u00d7 TPS \u00d7 \u03b7_swap, where \u03b7_swap = 1/(1 + T_kv_swap / T_gen). For long conversations, \u03b7_swap approaches 1 (swap is amortized). For short exchanges, swap overhead is more significant.",
+    refs: "With 256 avg tokens/context and 200ms swap: \u03b7_swap \u2248 0.97 (97% efficiency). With 10 avg tokens: \u03b7_swap \u2248 0.71 (71% efficiency). Longer conversations hide swap cost better.",
+  },
+
+  quant_vs_offload: {
+    title: "Quantize vs Offload Decision (N10)",
+    explain: "When weights don't fit in VRAM, you face a choice: (1) Quantize weights more aggressively to fit in VRAM, or (2) Keep higher precision but offload to RAM. The answer is almost always to quantize, because the Bus Wall penalty from weight offloading (30-100x slower) far exceeds the quality loss from lower quantization. The decision threshold: if f_RAM \u00d7 Bus_Wall > 2, quantize instead.",
+    refs: "70B model: Q4 (35 GB, fits in 1\u00d780GB A100) vs FP16 (140 GB, needs offload). Q4 decode: ~86 tok/s. FP16 offloaded: ~0.5-2 tok/s. Q4 wins decisively.",
+  },
 };
 

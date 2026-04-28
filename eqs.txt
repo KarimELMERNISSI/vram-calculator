@@ -1,0 +1,63 @@
+$$ V_{total} = V_{weights} + V_{kv} + V_{overhead} \quad \text{(Equation 1)} $$
+$$ V_{weights} = P_{total} \times b_{param} \quad \text{(Equation 2)} $$
+$$ V_{kv} = 2 \times L \times n_{kv} \times d_{h} \times C \times B \times U \times b_{kv} \quad \text{(Equation 3)} $$
+$$ V_{kv} \approx P_{total} \times 0.12 \times (C / 4096) \times B \times U \quad \text{(Equation 4)} $$
+$$ V_{overhead} = V_{weights} \times f_{overhead} \quad \text{(Equation 5)} $$
+$$ V_{overflow} = \max(0, V_{total} - V_{VRAM}) \quad \text{(Equation 6)} $$
+$$ V_{RAM,usable} = \min(V_{overflow}, V_{RAM,available}) \quad \text{(Equation 7)} $$
+$$ V_{effective} = V_{VRAM} + V_{RAM,usable} \quad \text{(Equation 8)} $$
+$$ Bus Wall Ratio = BW_{HBM} / BW_{transfer} \quad \text{(Equation 9)} $$
+$$ BW_{transfer} = \min(BW_{PCIe,effective}, BW_{RAM,effective}) \quad \text{(Equation 10)} $$
+$$ T_{decode} = W_{VRAM} / BW_{HBM} + W_{RAM} / BW_{transfer} \quad \text{(Equation 11)} $$
+$$ f_{RAM} = V_{RAM,usable} / V_{total} \quad \text{(Equation 12)} $$
+$$ TPS_{offload} = 1 / ((1-f_{RAM}) \times W / BW_{HBM} + f_{RAM} \times W / BW_{transfer}) \quad \text{(Equation 13)} $$
+$$ V_{kv,VRAM}^{max} = \max(0, V_{VRAM} - V_{weights} - V_{overhead}) \quad \text{(Equation 13a)} $$
+$$ V_{kv,VRAM} = \min(V_{kv}, V_{kv,VRAM}^{max}) \quad \text{(Equation 13b)} $$
+$$ V_{kv,RAM} = \max(0, V_{kv} - V_{kv,VRAM}^{max}) \quad \text{(Equation 13c)} $$
+$$ V_{weights,RAM} = \max(0, V_{weights} - V_{VRAM} + V_{overhead}) \quad \text{(Equation 13d)} $$
+$$ TPS_B = TPS_A = BW_{HBM} / (P_{active} \times b_{param}) \quad \text{(Equation 14)} $$
+$$ T_{kv,swap} = V_{kv,RAM} / BW_{transfer} \quad \text{(Equation 15)} $$
+$$ TTFT_B = TTFT_A + T_{kv,swap} \quad \text{(Equation 16)} $$
+$$ TTFT_C = \max(T_{compute}, T_{weight,load}) \quad \text{(Equation 17)} $$
+$$ TTFT_D = \max(T_{compute}, T_{weight,load}) + T_{kv,swap} \quad \text{(Equation 18)} $$
+$$ U_{active} = \lfloor V_{kv,VRAM}^{max} / V_{kv,per user} \rfloor \quad \text{(Equation 19)} $$
+$$ U_{swapped} = \lfloor V_{RAM,for KV} / V_{kv,per user} \rfloor \quad \text{(Equation 20)} $$
+$$ U_{total} = U_{active} + U_{swapped} \quad \text{(Equation 21)} $$
+$$ TPS_{eff} = U_{active} \times TPS + U_{swapped} \times TPS \times \eta_{swap} \quad \text{(Equation 22)} $$
+$$ \eta_{swap} = 1 / (1 + T_{kv,swap} / T_{gen}) \quad \text{(Equation 23)} $$
+$$ b_{fit} = (V_{VRAM} - V_{overhead}) / P_{total} \quad \text{(Equation 24)} $$
+**Quantize if** `f_RAM × Bus Wall Ratio > 2` **(Equation 25)**
+$$ BW_{PCIe,theoretical} = R_{GT}/s \times N_{lanes} \times (128/130 (for PCIe Gen 3.0+)) \div 8 \quad \text{(Equation 26)} $$
+$$ BW_{PCIe,effective} = BW_{PCIe,theoretical} \times η_{PCIe} \quad \text{(Equation 27)} $$
+$$ BW_{RAM,theoretical} = MT/s \times N_{channels} \times 8 bytes/transfer \quad \text{(Equation 28)} $$
+$$ BW_{RAM,effective} = BW_{RAM,theoretical} \times η_{RAM} \times f_{NUMA} \quad \text{(Equation 29)} $$
+$$ f_{NUMA} = 1.0 \quad \text{(Equation 30)} $$ if NUMA-aware (weights on local socket)
+$$ BW_{transfer} = \min(BW_{PCIe,effective}, BW_{RAM,effective}) \quad \text{(Equation 31)} $$
+$$ TFLOPS = N_{cores} \times f_{clock} \times 2 FLOP/clock/core (CUDA cores, FMA operation) \quad \text{(Equation 32)} $$
+$$ AI = FLOPs / Bytes accessed \quad \text{(Equation 33)} $$
+$$ AI_{decode} = (2 \times P_{active}) / (P_{active} \times b) = 2/b \quad \text{(Equation 34)} $$
+$$ AI_{ridge} = TFLOPS / BW_{HBM} \quad \text{(Equation 35)} $$
+> **Equation 36** — All-reduce with NVSwitch:  
+$$ All-reduce_{ring} = 2 \times ((N-1)/N) \times (h \times 2) / BW_{NVLink} \quad \text{(Equation 37)} $$
+$$ T_{TP} = (P_{active} \times b) / (N \times BW_{HBM}) + L \times ((2 \times (N-1)/N \times h \times 2) / BW_{interconnect} + λ_{AR}) \quad \text{(Equation 38)} $$
+$$ η_{TP} = T_{compute} / (T_{compute} + T_{communication}) \quad \text{(Equation 39)} $$
+$$ Bubble fraction = (N-1) / (N + M - 1) \quad \text{(Equation 40)} $$
+$$ T_{decode} = (1-f_{RAM}) \times W / (η_{TP} \times N \times BW_{HBM}) + f_{RAM} \times W / \min(η_{PCIe} \times BW_{PCIe} η_{RAM} \times f_{NUMA} \times BW_{RAM}) \quad \text{(Equation 41)} $$
+$$ TPS = BW / (P_{active} \times b_{param} \times 1000) \quad \text{(Equation 42)} $$
+$$ TTFT = (P_{active} \times C \times 2 \times b_{param}) / BW \times 1000 ms \quad \text{(Equation 43)} $$
+$$ Latency per token = 1000 / TPS \quad \text{ms (Equation 44)} $$
+$$ Time_{100} = TTFT/1000 + 100/TPS \quad \text{seconds (Equation 45)} $$
+$$ Time_{1000} = TTFT/1000 + 1000/TPS \quad \text{seconds (Equation 46)} $$
+$$ Throughput = TPS \times U \quad \text{tok/s total (Equation 47)} $$
+$$ P_{draw} = TDP \times (U_{GPU} / 100) \quad \text{(Equation 48)} $$
+$$ E_{hour} = P_{draw} / 1000 \quad \text{kWh (Equation 49)} $$
+$$ C_{hour} = E_{hour} \times R_{elec} \quad \text{(Equation 50)} $$
+$$ C_{day} = C_{hour} \times H_{day} \quad \text{(Equation 51)} $$
+$$ C_{month} = C_{day} \times 30 \quad \text{(Equation 52)} $$
+$$ C_{1M} tok = (C_{hour} / (TPS \times 3600)) \times 10⁶ \quad \text{(Equation 53)} $$
+$$ CO_{2,hour} = E_{hour} \times I_{carbon} \quad \text{(Equation 54)} $$
+$$ CO_{2,annual} = CO_{2,hour} \times H_{day} \times 365 / 1000 \quad \text{tonnes (Equation 55)} $$
+$$ V_{FT} = V_{weights} + V_{gradients} + V_{optimizer} + V_{activations} \quad \text{(Equation 56)} $$
+$$ V_{LoRA} \approx 0.40 \times V_{weights} \quad \text{(Equation 57)} $$
+$$ V_{gradients} = P_{total} \times b_{train} \quad \text{(Equation 58)} $$
+$$ V_{optimizer} = P_{total} \times 8 \quad \text{(AdamW FP32: momentum + variance) (Equation 59)} $$
