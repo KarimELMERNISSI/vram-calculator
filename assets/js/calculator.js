@@ -1,6 +1,6 @@
-// ═══════════════════════════════════════════════════════════
+// ============================================================================
 // MAIN CALC
-// ═══════════════════════════════════════════════════════════
+// ============================================================================
 function calc() {
   var m = getModel();
   if (!m) return;
@@ -160,9 +160,9 @@ function calc() {
     ? parseFloat(document.getElementById("sysRam").value) || 0
     : 0;
 
-  // ═══════════════════════════════════════════════════════════════════
+  // ============================================================================
   // N1: VRAM PRIORITY ALLOCATION MODEL
-  // ═══════════════════════════════════════════════════════════════════
+  // ============================================================================
   // Weights get VRAM priority (read every token), KV gets remaining VRAM
   var allocation = MathEngine.calcVRAMAllocation(wGB, kvGB, ovGB, totV, sysRam);
 
@@ -457,9 +457,9 @@ function calc() {
       .join("\n");
   }
 
-  // ═══════════════════════════════════════════════════════════════════
+  // ============================================================================
   // PERFORMANCE ESTIMATES (v3: Regime-Aware Offload Model)
-  // ═══════════════════════════════════════════════════════════════════
+  // ============================================================================
   //
   // The key distinction from the previous model:
   //   - Weight offloading → Bus Wall penalty on EVERY decode token
@@ -467,11 +467,11 @@ function calc() {
   //
   // Regime A: TPS = BW_HBM / (P_active × b) [full speed]
   // Regime B: TPS = same as A [weights still in VRAM!]
-  //           TTFT_B = TTFT_A + T_kv_swap
+  // ============================================================================TTFT_B = TTFT_A + T_kv_swap
   // Regime C: TPS = 1 / (W_VRAM/BW_HBM + W_RAM/BW_transfer) [Bus Wall]
-  //           TTFT_C = max(compute, weight_load)
+  // ============================================================================TTFT_C = max(compute, weight_load)
   // Regime D: TPS = same as C [Bus Wall from weight offload]
-  //           TTFT_D = TTFT_C + T_kv_swap
+  // ============================================================================TTFT_D = TTFT_C + T_kv_swap
   if (!isFT) {
     var bw = gpu.bw || 900;
     var tflops = gpu.tflops || 0;
@@ -606,9 +606,9 @@ function calc() {
       ttftBase = ((wBytes / bw) * 1000) / tpEfficiency;
     }
 
-    // ═════════════════════════════════════════════════════════════════
+    // ============================================================================
     // 5. APPLY REGIME-AWARE PERFORMANCE MODEL (N3-N7)
-    // ═════════════════════════════════════════════════════════════════
+    // ============================================================================
     var ramPerfNote = document.getElementById("ramPerfNote");
     var ttft = ttftBase;
     var kvSwapTimeS = 0;

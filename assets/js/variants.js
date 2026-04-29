@@ -1,6 +1,6 @@
-// ═══════════════════════════════════════════════════════════
+// ============================================================================
 // VARIANT DISCOVERY & RENDERING
-// ═══════════════════════════════════════════════════════════
+// ============================================================================
 
 function discoverVariants(modelId, api) {
   var variants = [];
@@ -97,8 +97,20 @@ function renderVariants(variants) {
   var status = document.getElementById("varStatus");
   if (!variants || variants.length === 0) { section.className = "var-section"; return; }
   section.className = "var-section open";
+  // Label for the imported model's own card: derive from HF lineage metadata.
+  // Possible base_model_relation values: finetune | adapter | quantized | merge.
+  // Fall back to "FINE-TUNE" when base_model exists but relation is unset,
+  // and to "BASE MODEL" only when no parent reference is present at all.
+  var selfLabel = "BASE MODEL";
+  if (gImp) {
+    if (gImp.baseModelRelation) {
+      selfLabel = gImp.baseModelRelation.toUpperCase();
+    } else if (gImp.baseModel) {
+      selfLabel = "FINE-TUNE";
+    }
+  }
   var html = '<div class="var-card' + (gSelectedVar === -1 ? " selected" : "") + '" onclick="selectVariant(-1)">' +
-    '<div class="vc-type">BASE MODEL</div>' +
+    '<div class="vc-type">' + selfLabel + '</div>' +
     '<div class="vc-name">' + escHtml(gImp ? gImp.name : "Original") + '</div>' +
     '<div class="vc-detail">' + (gImp && gImp.tType ? gImp.tType : "BF16/FP16") + '</div>' +
     '<div class="vc-size">' + (gImp && gImp.p ? (gImp.p * (gImp.tBpb || 2)).toFixed(1) + " GB est." : "") + '</div></div>';
