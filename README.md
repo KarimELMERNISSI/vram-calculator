@@ -70,5 +70,5 @@ Technical documentation (LaTeX sources and PDFs) is available in the [`docs/`](.
 
 ## License
 
-Internal tool — Croix-Rouge luxembourgeoise.
+GNU GPL (General Public License)
 
